@@ -6,6 +6,33 @@ go-to-line, line wrap, and auto-save, a markdown preview that renders Mermaid
 diagrams, and an "add this file to the prompt" action that attaches the file as
 agent-visible context.
 
+## Preview
+
+The screenshots below come from a throwaway project, `notes-app`: a small Hono
+service with a React client, picked because it has folders, a `.github`
+directory, a Mermaid diagram, and a mention-worthy file name.
+
+![The Finder page: workspace picker, file tree, and the editor showing src/server.ts](docs/screenshots/overview.png)
+
+Search in files reads every file under the chosen scope. Hits group under a
+sticky file header and a click opens the file at its line:
+
+![Search in files for "retry": 16 matches in 5 files, grouped by file](docs/screenshots/search-in-files.png)
+
+Markdown opens as a preview, and a fenced `mermaid` block renders through BB's
+own message renderer:
+
+![The markdown preview rendering a Mermaid flowchart](docs/screenshots/markdown-preview.png)
+
+The same explorer sits beside a thread, pinned to that thread's workspace:
+
+![The Finder tab beside a thread, editing src/server.ts](docs/screenshots/thread-panel.png)
+
+`@` in any composer lists workspace files; the pill carries the path, and the
+contents are read when the message is sent:
+
+![The @ mention menu: typing @src/store offers src/store.ts from the Finder provider](docs/screenshots/at-mention.png)
+
 ## What it looks like
 
 - A **Finder** page in the sidebar (`app.slots.navPanel`), routed at
