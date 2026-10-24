@@ -1,6 +1,6 @@
 {
   "name": "bb-plugin-finder",
-  "version": "0.2.0",
+  "version": "0.2.1",
   "private": true,
   "type": "module",
   "description": "A VS Code-style file browser and editor for the workspace behind a project, environment, or thread.",
