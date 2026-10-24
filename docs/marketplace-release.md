@@ -157,6 +157,25 @@ the plugin does, the release source and range, the plugin checks that passed,
 the marketplace checks that passed, what each screenshot shows, and where the
 overview text came from.
 
+### The v1-change gate
+
+CI runs `npm run gate:v1`, which compares every entry against the frozen v1
+document already published at `https://getbb.app/marketplace/v1/marketplace.json`.
+Any byte that differs in an existing entry — the range, the description, a tag
+— fails the job with:
+
+```
+error: Frozen v1 entries changed. changed entries: finder
+error: Add the "v1-change" label if the change is intentional.
+```
+
+Only a repository maintainer can apply that label; a contributor's token gets
+`Must have admin rights to Repository`. So an update pull request that changes
+any v1 field stays red until a maintainer labels it, and that is the normal path
+— say so in a comment on the pull request instead of trying to make the job
+green. `npm run build` and `npm test` run before the gate and must pass on their
+own.
+
 A maintainer reviews the source and the behavior before merging. Merging
 publishes both marketplace documents; it installs nothing on any user's
 machine.

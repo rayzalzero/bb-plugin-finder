@@ -122,6 +122,8 @@ The short version:
    and the tag. Never move or reuse a tag.
 4. Only when the entry's own fields change — a new range, a new screenshot, new
    copy, a new icon — open a pull request against the marketplace repository.
+   Its `gate:v1` job fails on any changed field until a maintainer adds the
+   `v1-change` label; that is expected, not a bug to work around.
 5. Update `PLUGIN_OVERVIEW.md` in the same change that changes what the store
    says, and copy it into the marketplace `overview/finder.md`.
 
