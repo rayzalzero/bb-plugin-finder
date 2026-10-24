@@ -70,6 +70,7 @@ contents are read when the message is sent:
 | Search inside files | Tree header — reads file contents under the whole workspace or one folder (chosen from a scope menu), with match case, regexp, and whole word; results group under a sticky file header, the list scrolls, and a hit opens the file at its line. Each file folds away individually, with collapse-all and expand-all in the summary row; folds are keyed by path, so refining the query keeps the same files folded |
 | Refresh folder | Tree footer and page header |
 | Collapse / expand all | Tree footer |
+| Outline (symbol tree) of the file in front | Panel under the tree, toggled in the tree footer. Derived from the same grammar the editor highlights with, so it lists classes, interfaces, enums, types, namespaces, functions, methods, properties, variables, constants, markdown headings, JSON/YAML keys, TOML sections, HTML/XML elements, CSS rules, and SQL tables/views/functions; a click puts the caret on the declaration. Nesting follows the symbols, a file with no grammar shows no list, and the parse is capped (512 KB, 400 symbols) so it never blocks typing. The panel is resizable: drag its top edge, or focus that edge and press Up/Down; the height is remembered, and the tree always keeps at least 30% of the sidebar |
 | Toggle the file editor | Page header |
 | Toggle the file tree | Page header |
 | Select a file as prompt context | Toolbar button, or `@` in any composer |
@@ -102,15 +103,17 @@ keep separate histories.
 - `app.tsx` — the frontend entry: the nav panel, the thread panel action, and
   the `fileOpener` registration that routes BB's file opens to `FileOpenerTab`.
 - `components/` — `Workspace` (the shell and layout), `Explorer` (the tree and
-  its context menu), `CodeEditor` (CodeMirror), `FileView` (toolbar and panes),
+  its context menu), `OutlinePanel` (the symbol tree of the file in front),
+  `CodeEditor` (CodeMirror), `FileView` (toolbar and panes),
   `FileOpenerTab` (the same editor as a BB file tab, for file references opened
   from chat and elsewhere), `FilePaneChrome` (the toolbar/notice/empty-pane
   pieces both panes share), `WorkspacePicker`, and the state hooks.
 - `lib/` — path arithmetic, tree building/filtering/fuzzy ranking, content-search
-  matching, language detection, the BB-code-theme → CodeMirror theme bridge,
-  route parsing, the editor preferences (`lib/prefs.ts`) shared between the
-  panel and BB's file tab, and the per-workspace memory of what the panel was
-  showing.
+  matching, the outline extractor (`lib/outline.ts`, which reads CodeMirror's
+  syntax tree per language), language detection, the BB-code-theme → CodeMirror
+  theme bridge, route parsing, the editor preferences (`lib/prefs.ts`) shared
+  between the panel and BB's file tab, and the per-workspace memory of what the
+  panel was showing.
 - `skills/finder/SKILL.md` — how an agent should use `bb finder`.
 
 ## How it reads and writes

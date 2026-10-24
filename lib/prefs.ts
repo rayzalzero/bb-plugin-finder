@@ -6,6 +6,10 @@
 
 export const LINE_WRAP_KEY = "finder:line-wrap";
 export const AUTOSAVE_KEY = "finder:autosave";
+/** Whether the symbol outline under the file tree is showing. */
+export const OUTLINE_KEY = "finder:outline";
+/** How tall the outline is, in pixels, as the user last dragged it. */
+export const OUTLINE_HEIGHT_KEY = "finder:outline-height";
 
 /** How long typing settles before an auto-save writes. */
 export const AUTOSAVE_DELAY_MS = 1200;

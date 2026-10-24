@@ -5,7 +5,9 @@ import { Explorer } from "./Explorer";
 import { FileView } from "./FileView";
 import { useAddToChat } from "./use-add-to-chat";
 import { fileToBase64, useTree, useTreeMutations, type TreeState } from "./use-tree";
-import { isDirty, useFileTabs } from "./use-file-tabs";
+import { isDirty, renderedText, useFileTabs } from "./use-file-tabs";
+import { useOutline } from "./use-outline";
+import { languageForPath } from "@/lib/file-kind";
 import { cn } from "@/lib/utils";
 import { ancestorsOf } from "@/lib/tree";
 import { patchWorkspaceState, readWorkspaceState } from "@/lib/workspace-state";
@@ -17,6 +19,8 @@ import {
   AUTOSAVE_DELAY_MS,
   AUTOSAVE_KEY,
   LINE_WRAP_KEY,
+  OUTLINE_HEIGHT_KEY,
+  OUTLINE_KEY,
   readPref,
   readPrefFlag,
   writePref,
@@ -34,6 +38,9 @@ const MIN_EXPLORER_PX = 180;
 const MAX_EXPLORER_PX = 560;
 const DEFAULT_EXPLORER_PX = 260;
 const HIDDEN_STORAGE_KEY = "finder:include-hidden";
+const MIN_OUTLINE_PX = 80;
+const MAX_OUTLINE_PX = 640;
+const DEFAULT_OUTLINE_PX = 220;
 
 export function Workspace({ scope, filePath, onOpenPath }: WorkspaceProps) {
   // Everything below is per-workspace state, so the whole shell is keyed on the
@@ -77,6 +84,11 @@ function WorkspaceState({ scope, filePath, onOpenPath }: WorkspaceProps) {
   );
   const [lineWrap, setLineWrap] = useState(() => readPrefFlag(LINE_WRAP_KEY, true));
   const [autosave, setAutosave] = useState(() => readPrefFlag(AUTOSAVE_KEY, false));
+  const [outlineOpen, setOutlineOpen] = useState(() => readPrefFlag(OUTLINE_KEY, true));
+  const [outlineHeight, setOutlineHeight] = useState(
+    () =>
+      Number(readPref(OUTLINE_HEIGHT_KEY, String(DEFAULT_OUTLINE_PX))) || DEFAULT_OUTLINE_PX,
+  );
 
   const tree = useTree(scope, includeHidden);
   const tabs = useFileTabs(scope);
@@ -98,6 +110,12 @@ function WorkspaceState({ scope, filePath, onOpenPath }: WorkspaceProps) {
   useEffect(() => {
     writePref(AUTOSAVE_KEY, String(autosave));
   }, [autosave]);
+  useEffect(() => {
+    writePref(OUTLINE_KEY, String(outlineOpen));
+  }, [outlineOpen]);
+  useEffect(() => {
+    writePref(OUTLINE_HEIGHT_KEY, String(outlineHeight));
+  }, [outlineHeight]);
   useEffect(() => {
     writePref(WIDTH_STORAGE_KEY, String(explorerWidth));
   }, [explorerWidth]);
@@ -135,6 +153,16 @@ function WorkspaceState({ scope, filePath, onOpenPath }: WorkspaceProps) {
   saveRef.current = saveTab;
   const activePath = tabs.activePath;
   const activeFile = activeTab?.file ?? null;
+  // The outline describes what the pane shows, so it follows the draft rather
+  // than the file on disk: a symbol typed but not yet saved belongs in it. A
+  // closed panel — or a tree pane swapped for the content search — parses
+  // nothing, because the work would be invisible.
+  const outlineText =
+    activeTab === null || !outlineOpen || treeMode !== "tree" ? null : renderedText(activeTab);
+  const outline = useOutline(
+    outlineText,
+    activePath === null ? "plaintext" : languageForPath(activePath),
+  );
   const activeEditable = activeFile !== null && activeFile.kind === "text" && activeFile.editable;
   const activeDirty = activeTab !== null && isDirty(activeTab);
   useEffect(() => {
@@ -278,6 +306,22 @@ function WorkspaceState({ scope, filePath, onOpenPath }: WorkspaceProps) {
                 }}
                 onRefresh={tree.refresh}
                 onOpenSearch={() => setTreeMode("search")}
+                outline={{
+                  open: outlineOpen,
+                  onToggleOpen: () => setOutlineOpen((current) => !current),
+                  path: activePath,
+                  symbols: outline.symbols,
+                  pending: outline.pending,
+                  // The pane owns the reveal, so a symbol click is the same
+                  // request a search hit makes: name the line and let the
+                  // editor take it once.
+                  onOpenSymbol: (line) => setRevealLine(line),
+                  height: outlineHeight,
+                  onResize: (next) =>
+                    setOutlineHeight(
+                      Math.min(MAX_OUTLINE_PX, Math.max(MIN_OUTLINE_PX, Math.round(next))),
+                    ),
+                }}
               />
               )}
             </div>

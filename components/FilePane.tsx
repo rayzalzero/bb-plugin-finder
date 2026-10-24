@@ -119,7 +119,13 @@ export function FilePane({
   // sits on the same line number are two different targets.
   const revealedTarget = useRef<string | null>(null);
   useEffect(() => {
-    if (revealLine === null || text === null) return;
+    if (revealLine === null) {
+      // The caller dropped the line, so the next request for the same target —
+      // clicking the same outline symbol again — is a new request, not a repeat.
+      revealedTarget.current = null;
+      return;
+    }
+    if (text === null) return;
     const target = `${path}:${revealLine}`;
     if (revealedTarget.current === target) return;
     revealedTarget.current = target;

@@ -9,8 +9,10 @@ import {
   ContextMenuSeparator,
   ContextMenuTrigger,
 } from "@/components/ui/context-menu";
+import { OutlinePanel } from "./OutlinePanel";
 import { cn } from "@/lib/utils";
 import { extensionOf } from "@/lib/file-kind";
+import type { OutlineSymbol } from "@/lib/outline";
 import {
   allDirectoryPaths,
   ancestorsOf,
@@ -19,6 +21,20 @@ import {
   visibleRows,
   type FlatEntry,
 } from "@/lib/tree";
+
+/** The symbol tree under the file tree: what is in the file in front. */
+export interface OutlineStateProps {
+  open: boolean;
+  onToggleOpen(): void;
+  /** The file the outline describes, or null when no tab is in front. */
+  path: string | null;
+  symbols: readonly OutlineSymbol[];
+  pending: boolean;
+  onOpenSymbol(line: number): void;
+  /** Height in pixels, and the setter the drag handle calls. */
+  height: number;
+  onResize(next: number): void;
+}
 
 export interface ExplorerProps {
   entries: FlatEntry[];
@@ -39,6 +55,7 @@ export interface ExplorerProps {
   onRefresh(): void;
   /** Switch the pane from the file tree to the content search. */
   onOpenSearch(): void;
+  outline: OutlineStateProps;
 }
 
 /** A colored glyph per file family, so a glance is enough in a deep tree. */
@@ -98,6 +115,7 @@ export function Explorer({
   onUpload,
   onRefresh,
   onOpenSearch,
+  outline,
 }: ExplorerProps) {
   const [pending, setPending] = useState<PendingInput | null>(null);
   const [draftName, setDraftName] = useState("");
@@ -344,6 +362,17 @@ export function Explorer({
         </form>
       )}
 
+      <OutlinePanel
+        open={outline.open}
+        onToggleOpen={outline.onToggleOpen}
+        path={outline.path}
+        symbols={outline.symbols}
+        pending={outline.pending}
+        onOpenSymbol={outline.onOpenSymbol}
+        height={outline.height}
+        onResize={outline.onResize}
+      />
+
       <div className="flex items-center gap-0.5 border-t border-border px-1.5 py-1">
         <FooterAction label="New file" icon="Plus" run={() => begin({ kind: "file", directory: selectedDirectory, path: null, initial: "" })} />
         <FooterAction label="New folder" icon="FolderPlus" run={() => begin({ kind: "directory", directory: selectedDirectory, path: null, initial: "" })} />
@@ -351,6 +380,12 @@ export function Explorer({
         <FooterAction label="Refresh" icon="ArrowReloadHorizontal" run={onRefresh} />
         <FooterAction label="Expand all" icon="ChevronsDown" run={() => setAllDirectories(allDirectoryPaths(tree))} />
         <FooterAction label="Collapse all" icon="ChevronsUp" run={() => setAllDirectories([])} />
+        <FooterAction
+          label={outline.open ? "Hide the outline" : "Show the outline"}
+          icon="Layers"
+          active={outline.open}
+          run={outline.onToggleOpen}
+        />
         <span className="ml-auto truncate pr-1 text-[10px] text-muted-foreground">
           {selectedDirectory === "" ? "root" : selectedDirectory}
           {` · ${fileCount} files`}
@@ -360,14 +395,28 @@ export function Explorer({
   );
 }
 
-function FooterAction({ label, icon, run }: { label: string; icon: string; run: () => void }) {
+function FooterAction({
+  label,
+  icon,
+  run,
+  active,
+}: {
+  label: string;
+  icon: string;
+  run: () => void;
+  active?: boolean;
+}) {
   return (
     <button
       type="button"
       title={label}
       aria-label={label}
+      aria-pressed={active}
       onClick={run}
-      className="rounded p-1 text-muted-foreground hover:bg-accent hover:text-accent-foreground"
+      className={cn(
+        "rounded p-1 text-muted-foreground hover:bg-accent hover:text-accent-foreground",
+        active === true && "bg-accent text-accent-foreground",
+      )}
     >
       <Icon name={icon} aria-hidden className="size-3.5" />
     </button>
