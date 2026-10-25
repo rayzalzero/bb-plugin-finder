@@ -7,7 +7,7 @@ import {
 import { FilePane, copyToClipboard, type SaveState } from "@/components/FilePane";
 import { AUTOSAVE_DELAY_MS, AUTOSAVE_KEY, LINE_WRAP_KEY, readPrefFlag, writePref } from "@/lib/prefs";
 import type { rpcContract, ReadResult } from "../server.js";
-import { isMarkdownPath, type FileViewMode } from "@/lib/file-kind";
+import { isPreviewablePath, type FileViewMode } from "@/lib/file-kind";
 import type { ScopeRef } from "@/lib/route";
 
 /**
@@ -83,7 +83,7 @@ function WorkspaceFileTab({ path, scope, lineRange }: WorkspaceFileTabProps) {
         // make every save an unconditional overwrite of whatever an agent wrote
         // in the meantime, which is exactly what the guard exists to prevent.
         setSha256(next.kind === "text" ? next.sha256 : null);
-        setMode(next.kind === "text" && isMarkdownPath(path) ? "preview" : "edit");
+        setMode(next.kind === "text" && isPreviewablePath(path) ? "preview" : "edit");
         setSave({ kind: "clean" });
       })
       .catch((cause: unknown) => {

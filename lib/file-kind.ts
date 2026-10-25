@@ -73,6 +73,7 @@ const LANGUAGE_BY_EXTENSION: Readonly<Record<string, string>> = {
 };
 
 const MARKDOWN_EXTENSIONS = new Set(["md", "markdown"]);
+const HTML_EXTENSIONS = new Set(["html", "htm"]);
 
 export function extensionOf(path: string): string {
   const name = path.slice(path.lastIndexOf("/") + 1);
@@ -115,6 +116,21 @@ export function isMarkdownPath(path: string): boolean {
   return MARKDOWN_EXTENSIONS.has(extensionOf(path));
 }
 
+/**
+ * HTML renders in a sandboxed iframe from its own text: scripts run, but in an
+ * opaque origin with no access to BB, its cookies, or the plugin's RPC.
+ * Relative assets (stylesheets, images next to the file) do not resolve there —
+ * the document has no base URL on the workspace.
+ */
+export function isHtmlPath(path: string): boolean {
+  return HTML_EXTENSIONS.has(extensionOf(path));
+}
+
+/** Files that open as a rendered preview, with the source one click away. */
+export function isPreviewablePath(path: string): boolean {
+  return isMarkdownPath(path) || isHtmlPath(path);
+}
+
 export function formatBytes(bytes: number): string {
   if (bytes < 1024) return `${bytes} B`;
   if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(1)} KB`;
@@ -137,7 +153,21 @@ export function canPreviewMarkdown(path: string, text: string): boolean {
   return isMarkdownPath(path) && text.length <= MARKDOWN_PREVIEW_MAX_CHARS;
 }
 
-/** What the pane shows: rendered markdown, the source viewer, or the editor. */
+/**
+ * The iframe parses off the host's render path, so the cap only guards against
+ * copying a huge string into `srcdoc`.
+ */
+export const HTML_PREVIEW_MAX_CHARS = 8 * 1024 * 1024;
+
+export function canPreviewHtml(path: string, text: string): boolean {
+  return isHtmlPath(path) && text.length <= HTML_PREVIEW_MAX_CHARS;
+}
+
+export function canPreview(path: string, text: string): boolean {
+  return canPreviewMarkdown(path, text) || canPreviewHtml(path, text);
+}
+
+/** What the pane shows: rendered markdown or HTML, the source viewer, or the editor. */
 export type FileViewMode = "preview" | "read" | "edit";
 
 /**
@@ -152,5 +182,5 @@ export function allowedMode(
   text: string | null,
 ): FileViewMode {
   if (requested !== "preview") return requested;
-  return text !== null && canPreviewMarkdown(path, text) ? "preview" : "read";
+  return text !== null && canPreview(path, text) ? "preview" : "read";
 }
