@@ -13,7 +13,8 @@ import { PaneCentered, PaneNotice, PaneToolbarButton } from "./FilePaneChrome";
 import {
   allowedMode,
   formatBytes,
-  isMarkdownPath,
+  isHtmlPath,
+  isPreviewablePath,
   languageForPath,
   languageLabel,
   type FileViewMode,
@@ -110,7 +111,9 @@ export function FilePane({
   );
 
   const mode = allowedMode(requestedMode, path, text);
-  const isMarkdown = isMarkdownPath(path);
+  const isPreviewable = isPreviewablePath(path);
+  const isHtml = isHtmlPath(path);
+  const previewNoun = isHtml ? "HTML" : "markdown";
 
   // A caller names a line and nothing else, so the editor reveals it once the
   // text has arrived, then reports it consumed — the caller clears the prop, so
@@ -224,14 +227,14 @@ export function FilePane({
 
         <span className="mx-0.5 h-4 w-px bg-border" />
 
-        {isMarkdown && isText ? (
+        {isPreviewable && isText ? (
           <PaneToolbarButton
             // Driven by the RESOLVED mode, not the request: a markdown file too
             // large to preview resolves to `read`, and the button has to offer
             // the editor then — offering "Preview markdown" there would set a
             // request that resolves straight back to `read`, leaving the file
             // stuck in a read-only viewer it can never leave.
-            label={mode === "edit" ? "Preview markdown" : "Switch to editor"}
+            label={mode === "edit" ? `Preview ${previewNoun}` : "Switch to editor"}
             icon={mode === "edit" ? "Eye" : "Edit"}
             active={mode === "preview"}
             onClick={() => onSetMode(path, mode === "edit" ? "preview" : "edit")}
@@ -315,6 +318,16 @@ export function FilePane({
           </div>
         ) : file.kind === "binary" ? (
           <PaneCentered>{file.reason}</PaneCentered>
+        ) : mode === "preview" && text !== null && isHtml ? (
+          <iframe
+            // No allow-same-origin: the page runs in an opaque origin and can
+            // reach neither BB nor the plugin. Scripts, forms and popups stay
+            // on so generated reports and demos behave as they would in a tab.
+            title={path}
+            srcDoc={text}
+            sandbox="allow-scripts allow-forms allow-popups allow-modals"
+            className="h-full w-full border-0 bg-white"
+          />
         ) : mode === "preview" && text !== null ? (
           <div className="h-full overflow-auto px-4 py-4">
             <Markdown content={text} />
