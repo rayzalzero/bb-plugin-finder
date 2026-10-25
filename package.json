@@ -1,6 +1,6 @@
 {
   "name": "bb-plugin-finder",
-  "version": "0.2.2",
+  "version": "0.3.0",
   "private": true,
   "type": "module",
   "description": "A VS Code-style file browser and editor for the workspace behind a project, environment, or thread.",
@@ -51,7 +51,7 @@
     "zod": "^4.3.6"
   },
   "devDependencies": {
-    "@get-bb/plugin-sdk": "0.6.15",
+    "@get-bb/plugin-sdk": "0.6.79",
     "@radix-ui/react-context-menu": "^2.3.3",
     "@radix-ui/react-dropdown-menu": "^2.1.20",
     "@types/better-sqlite3": "^7.6.12",

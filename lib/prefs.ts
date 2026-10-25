@@ -10,6 +10,8 @@ export const AUTOSAVE_KEY = "finder:autosave";
 export const OUTLINE_KEY = "finder:outline";
 /** How tall the outline is, in pixels, as the user last dragged it. */
 export const OUTLINE_HEIGHT_KEY = "finder:outline-height";
+/** Whether the diff viewer draws one column or two. */
+export const DIFF_LAYOUT_KEY = "finder:diff-layout";
 
 /** How long typing settles before an auto-save writes. */
 export const AUTOSAVE_DELAY_MS = 1200;

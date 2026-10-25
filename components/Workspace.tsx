@@ -13,11 +13,15 @@ import { ancestorsOf } from "@/lib/tree";
 import { patchWorkspaceState, readWorkspaceState } from "@/lib/workspace-state";
 import { useContentSearch } from "./use-content-search";
 import { ContentSearch } from "./ContentSearch";
+import { DiffView, type DiffLayout } from "./DiffView";
+import { ChangesList } from "./ChangesList";
+import { useGitChanges, useGitFileDiff } from "./use-git-changes";
 import { scopeKey } from "@/lib/route";
 import type { ScopeRef } from "@/lib/route";
 import {
   AUTOSAVE_DELAY_MS,
   AUTOSAVE_KEY,
+  DIFF_LAYOUT_KEY,
   LINE_WRAP_KEY,
   OUTLINE_HEIGHT_KEY,
   OUTLINE_KEY,
@@ -78,6 +82,10 @@ function WorkspaceState({ scope, filePath, onOpenPath }: WorkspaceProps) {
   const [treeMode, setTreeMode] = useState<"tree" | "search">("tree");
   /** Line a search hit asked the editor to reveal, consumed by the pane below. */
   const [revealLine, setRevealLine] = useState<number | null>(null);
+  /** The file whose uncommitted diff is open; null keeps the editor in front. */
+  const [diffPath, setDiffPath] = useState<string | null>(null);
+  /** Whether the full uncommitted-change list is showing in the editor area. */
+  const [changesOpen, setChangesOpen] = useState(false);
   const [isEditorOpen, setIsEditorOpen] = useState(true);
   const [explorerWidth, setExplorerWidth] = useState(
     () => Number(readPref(WIDTH_STORAGE_KEY, String(DEFAULT_EXPLORER_PX))) || DEFAULT_EXPLORER_PX,
@@ -85,12 +93,23 @@ function WorkspaceState({ scope, filePath, onOpenPath }: WorkspaceProps) {
   const [lineWrap, setLineWrap] = useState(() => readPrefFlag(LINE_WRAP_KEY, true));
   const [autosave, setAutosave] = useState(() => readPrefFlag(AUTOSAVE_KEY, false));
   const [outlineOpen, setOutlineOpen] = useState(() => readPrefFlag(OUTLINE_KEY, true));
+  const [diffLayout, setDiffLayout] = useState<DiffLayout>(
+    () => (readPref(DIFF_LAYOUT_KEY, "unified") === "split" ? "split" : "unified"),
+  );
   const [outlineHeight, setOutlineHeight] = useState(
     () =>
       Number(readPref(OUTLINE_HEIGHT_KEY, String(DEFAULT_OUTLINE_PX))) || DEFAULT_OUTLINE_PX,
   );
 
   const tree = useTree(scope, includeHidden);
+  const git = useGitChanges(scope);
+  // The listing preloads patches only while the change set is small, so the
+  // viewer asks for the one file it is showing when it has none.
+  const fileDiff = useGitFileDiff(
+    scope,
+    diffPath,
+    diffPath === null ? null : (git.patches.get(diffPath) ?? null),
+  );
   const tabs = useFileTabs(scope);
   const contentSearch = useContentSearch(scope, includeHidden);
   const addToChat = useAddToChat(scope);
@@ -113,6 +132,9 @@ function WorkspaceState({ scope, filePath, onOpenPath }: WorkspaceProps) {
   useEffect(() => {
     writePref(OUTLINE_KEY, String(outlineOpen));
   }, [outlineOpen]);
+  useEffect(() => {
+    writePref(DIFF_LAYOUT_KEY, diffLayout);
+  }, [diffLayout]);
   useEffect(() => {
     writePref(OUTLINE_HEIGHT_KEY, String(outlineHeight));
   }, [outlineHeight]);
@@ -153,6 +175,14 @@ function WorkspaceState({ scope, filePath, onOpenPath }: WorkspaceProps) {
   saveRef.current = saveTab;
   const activePath = tabs.activePath;
   const activeFile = activeTab?.file ?? null;
+  // A diff is about the file whose changes are being examined; moving to a
+  // different file (via the tree, a tab, or the route) drops the stale diff
+  // rather than leaving an unrelated one asking to be closed. Opening a file
+  // also closes the change list, because the user asked to see that file.
+  useEffect(() => {
+    setDiffPath(null);
+    setChangesOpen(false);
+  }, [activePath]);
   // The outline describes what the pane shows, so it follows the draft rather
   // than the file on disk: a symbol typed but not yet saved belongs in it. A
   // closed panel — or a tree pane swapped for the content search — parses
@@ -272,58 +302,82 @@ function WorkspaceState({ scope, filePath, onOpenPath }: WorkspaceProps) {
         {isTreeOpen ? (
           <>
             <div
-              className="min-h-0 shrink-0 border-r border-border"
+              className="flex min-h-0 shrink-0 flex-col border-r border-border"
               style={{ width: `${explorerWidth}px` }}
             >
-              {treeMode === "search" ? (
-                <ContentSearch
-                  search={contentSearch}
-                  scope={scope}
-                  scopes={searchScopes}
-                  directory={selectedDirectory}
-                  onDirectoryChange={setSelectedDirectory}
-                  onOpenHit={openSearchHit}
-                  onClose={() => setTreeMode("tree")}
-                />
-              ) : (
-              <Explorer
-                entries={tree.state.entries}
-                expanded={expanded}
-                onToggleExpanded={toggleExpanded}
-                onSetExpanded={(paths) => setExpanded(new Set(paths))}
-                activePath={tabs.activePath}
-                onOpenFile={openFile}
-                filter={filter}
-                onFilterChange={setFilter}
-                selectedDirectory={selectedDirectory}
-                onSelectDirectory={setSelectedDirectory}
-                onCreate={mutations.create}
-                onRename={mutations.rename}
-                onRemove={mutations.remove}
-                onUpload={(directory) => {
-                  uploadDirectory.current = directory;
-                  uploadInput.current?.click();
-                }}
-                onRefresh={tree.refresh}
-                onOpenSearch={() => setTreeMode("search")}
-                outline={{
-                  open: outlineOpen,
-                  onToggleOpen: () => setOutlineOpen((current) => !current),
-                  path: activePath,
-                  symbols: outline.symbols,
-                  pending: outline.pending,
-                  // The pane owns the reveal, so a symbol click is the same
-                  // request a search hit makes: name the line and let the
-                  // editor take it once.
-                  onOpenSymbol: (line) => setRevealLine(line),
-                  height: outlineHeight,
-                  onResize: (next) =>
-                    setOutlineHeight(
-                      Math.min(MAX_OUTLINE_PX, Math.max(MIN_OUTLINE_PX, Math.round(next))),
-                    ),
-                }}
-              />
-              )}
+              <div className="min-h-0 flex-1">
+                {treeMode === "search" ? (
+                  <ContentSearch
+                    search={contentSearch}
+                    scope={scope}
+                    scopes={searchScopes}
+                    directory={selectedDirectory}
+                    onDirectoryChange={setSelectedDirectory}
+                    onOpenHit={openSearchHit}
+                    onClose={() => setTreeMode("tree")}
+                  />
+                ) : (
+                  <Explorer
+                    entries={tree.state.entries}
+                    expanded={expanded}
+                    onToggleExpanded={toggleExpanded}
+                    onSetExpanded={(paths) => setExpanded(new Set(paths))}
+                    activePath={tabs.activePath}
+                    onOpenFile={openFile}
+                    filter={filter}
+                    onFilterChange={setFilter}
+                    selectedDirectory={selectedDirectory}
+                    onSelectDirectory={setSelectedDirectory}
+                    onCreate={mutations.create}
+                    onRename={mutations.rename}
+                    onRemove={mutations.remove}
+                    onUpload={(directory) => {
+                      uploadDirectory.current = directory;
+                      uploadInput.current?.click();
+                    }}
+                    onRefresh={tree.refresh}
+                    onOpenSearch={() => setTreeMode("search")}
+                    changes={git.files}
+                    origins={git.origins}
+                    onOpenDiff={setDiffPath}
+                    outline={{
+                      open: outlineOpen,
+                      onToggleOpen: () => setOutlineOpen((current) => !current),
+                      path: activePath,
+                      symbols: outline.symbols,
+                      pending: outline.pending,
+                      // The pane owns the reveal, so a symbol click is the same
+                      // request a search hit makes: name the line and let the
+                      // editor take it once.
+                      onOpenSymbol: (line) => setRevealLine(line),
+                      height: outlineHeight,
+                      onResize: (next) =>
+                        setOutlineHeight(
+                          Math.min(MAX_OUTLINE_PX, Math.max(MIN_OUTLINE_PX, Math.round(next))),
+                        ),
+                    }}
+                  />
+                )}
+              </div>
+              {git.status === "ready" && git.files.size > 0 ? (
+                <div className="flex items-center border-t border-border px-1.5 py-1">
+                  <button
+                    type="button"
+                    title={git.shortstat}
+                    aria-label={`${git.files.size} changes`}
+                    onClick={() => {
+                      // The button opens the whole change set, not one file:
+                      // "what changed" is the question, and the list lets the
+                      // user pick which file to look at.
+                      setChangesOpen(true);
+                      setDiffPath(null);
+                    }}
+                    className="rounded border border-border px-2 py-0.5 text-xs hover:bg-accent hover:text-accent-foreground"
+                  >
+                    {git.files.size} changes
+                  </button>
+                </div>
+              ) : null}
             </div>
             <ResizeHandle
               width={explorerWidth}
@@ -336,7 +390,32 @@ function WorkspaceState({ scope, filePath, onOpenPath }: WorkspaceProps) {
 
         {isEditorOpen ? (
           <div className="min-h-0 min-w-0 flex-1">
-            {activeTab === null ? (
+            {diffPath !== null && git.status === "ready" ? (
+              <DiffView
+                path={diffPath}
+                patch={fileDiff.patch}
+                status={fileDiff.status}
+                message={fileDiff.message}
+                layout={diffLayout}
+                onLayoutChange={setDiffLayout}
+                onOpenFile={(p) => {
+                  setDiffPath(null);
+                  setChangesOpen(false);
+                  openFile(p);
+                }}
+                onClose={() => setDiffPath(null)}
+              />
+            ) : changesOpen && git.status === "ready" ? (
+              <ChangesList
+                files={git.files}
+                origins={git.origins}
+                binaries={git.binaries}
+                shortstat={git.shortstat}
+                activePath={diffPath}
+                onOpenDiff={setDiffPath}
+                onClose={() => setChangesOpen(false)}
+              />
+            ) : activeTab === null ? (
               <EmptyPane
                 workspace={tree.state.scope}
                 error={tree.state.error}

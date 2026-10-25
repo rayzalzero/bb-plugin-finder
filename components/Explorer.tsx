@@ -11,6 +11,7 @@ import {
 } from "@/components/ui/context-menu";
 import { OutlinePanel } from "./OutlinePanel";
 import { cn } from "@/lib/utils";
+import { changeLabel, type ChangeKind } from "@/lib/git-status";
 import { extensionOf } from "@/lib/file-kind";
 import type { OutlineSymbol } from "@/lib/outline";
 import {
@@ -56,6 +57,12 @@ export interface ExplorerProps {
   /** Switch the pane from the file tree to the content search. */
   onOpenSearch(): void;
   outline: OutlineStateProps;
+  /** Relative path -> change kind; null or empty hides every git badge. */
+  changes?: ReadonlyMap<string, ChangeKind> | null;
+  /** Relative path -> tracked/untracked, paired with `changes`. */
+  origins?: ReadonlyMap<string, "tracked" | "untracked"> | null;
+  /** Open one changed file's uncommitted diff. */
+  onOpenDiff?: (path: string) => void;
 }
 
 /** A colored glyph per file family, so a glance is enough in a deep tree. */
@@ -116,6 +123,9 @@ export function Explorer({
   onRefresh,
   onOpenSearch,
   outline,
+  changes = null,
+  origins = null,
+  onOpenDiff = () => {},
 }: ExplorerProps) {
   const [pending, setPending] = useState<PendingInput | null>(null);
   const [draftName, setDraftName] = useState("");
@@ -147,6 +157,20 @@ export function Explorer({
     () => entries.reduce((total, entry) => (entry.kind === "file" ? total + 1 : total), 0),
     [entries],
   );
+
+  // Each changed file marks every directory on its path, so a collapsed folder
+  // still advertises that it holds changes. Counted once per changes map rather
+  // than on every render walk.
+  const directoryChanges = useMemo(() => {
+    const counts = new Map<string, number>();
+    if (changes === null) return counts;
+    for (const path of changes.keys()) {
+      for (const ancestor of ancestorsOf(path)) {
+        counts.set(ancestor, (counts.get(ancestor) ?? 0) + 1);
+      }
+    }
+    return counts;
+  }, [changes]);
 
   const toggleDirectory = (path: string): void => {
     if (!filtering) {
@@ -248,6 +272,15 @@ export function Explorer({
           const isActive = node.path === activePath;
           const isTarget = isDirectory && node.path === selectedDirectory;
 
+          const changeKind = changes?.get(node.path);
+          // The host always pairs an origin with a change kind; a defensive
+          // fallback keeps a malformed response from dropping the badge.
+          const badge =
+            !isDirectory && changeKind !== undefined
+              ? changeLabel(node.path, changeKind, origins?.get(node.path) ?? "tracked")
+              : null;
+          const directoryCount = isDirectory ? (directoryChanges.get(node.path) ?? 0) : 0;
+
           return (
             <ContextMenu key={`${node.kind}:${node.path}`}>
               <ContextMenuTrigger asChild>
@@ -290,6 +323,15 @@ export function Explorer({
                     <FileGlyph path={node.path} />
                   )}
                   <span className="truncate">{node.name}</span>
+                  {badge !== null ? (
+                    <span className={cn("ml-auto shrink-0 font-mono text-[10px]", badge.tone)}>
+                      {badge.label}
+                    </span>
+                  ) : directoryCount > 0 ? (
+                    <span className="ml-auto shrink-0 rounded bg-accent/60 px-1 font-mono text-[10px] tabular-nums text-muted-foreground">
+                      {directoryCount}
+                    </span>
+                  ) : null}
                 </button>
               </ContextMenuTrigger>
 
@@ -314,6 +356,11 @@ export function Explorer({
                 ) : (
                   <>
                     <ContextMenuItem onSelect={() => onOpenFile(node.path)}>Open</ContextMenuItem>
+                    {changeKind === undefined ? null : (
+                      <ContextMenuItem onSelect={() => onOpenDiff(node.path)}>
+                        View changes
+                      </ContextMenuItem>
+                    )}
                     <ContextMenuItem onSelect={() => onCopy(node.path)}>Copy relative path</ContextMenuItem>
                     <ContextMenuSeparator />
                     <ContextMenuItem onSelect={() => begin({ kind: "rename", directory: "", path: node.path, initial: node.name })}>

@@ -255,6 +255,52 @@ export const rpcContract = defineRpcContract({
       .strict(),
     output: z.object({ written: z.array(z.string()) }),
   },
+  gitChanges: {
+    input: z.object({ scope: scopeSchema }).strict(),
+    output: z.discriminatedUnion("kind", [
+      z.object({
+        kind: z.literal("available"),
+        shortstat: z.string(),
+        mergeBaseRef: z.string().nullable(),
+        truncated: z.boolean(),
+        files: z.array(
+          z.object({
+            path: z.string(),
+            changeKind: z.enum([
+              "added",
+              "copied",
+              "deleted",
+              "modified",
+              "renamed",
+              "type_changed",
+            ]),
+            origin: z.enum(["tracked", "untracked"]),
+            additions: z.number(),
+            deletions: z.number(),
+            binary: z.boolean(),
+            previousPath: z.string().nullable(),
+          }),
+        ),
+        patches: z.array(z.object({ path: z.string(), patch: z.string() })),
+      }),
+      z.object({ kind: z.literal("not_git") }),
+      z.object({ kind: z.literal("unavailable"), message: z.string() }),
+    ]),
+  },
+  /**
+   * One file's patch, fetched when `gitChanges` returned the status without it.
+   * `diffFiles` only preloads patches while the change set is small, so a repo
+   * with hundreds of changed files arrives with an empty `patches` array and the
+   * diff has to be asked for by path.
+   */
+  gitFileDiff: {
+    input: z.object({ scope: scopeSchema, path: z.string().min(1) }).strict(),
+    output: z.discriminatedUnion("kind", [
+      z.object({ kind: z.literal("available"), patch: z.string(), truncated: z.boolean() }),
+      z.object({ kind: z.literal("not_git") }),
+      z.object({ kind: z.literal("unavailable"), message: z.string() }),
+    ]),
+  },
 });
 
 export default function plugin(bb: BbPluginApi) {
@@ -857,6 +903,67 @@ export default function plugin(bb: BbPluginApi) {
       }
       publishChanged(scope, directory);
       return { written };
+    },
+
+    async gitChanges({ scope }) {
+      const resolved = await requireScope(scope);
+      // A project checkout has no environment, so there is nothing to diff.
+      if (resolved.environmentId === null) return { kind: "not_git" as const };
+      const result = await bb.sdk.environments.diffFiles({
+        environmentId: resolved.environmentId,
+        // Not "against a merge base": this is what the agent changed, which the
+        // SDK reports without a base argument.
+        target: "uncommitted",
+      });
+      if (result.outcome === "available") {
+        return {
+          kind: "available" as const,
+          shortstat: result.shortstat,
+          mergeBaseRef: result.mergeBaseRef,
+          truncated: result.truncated,
+          files: result.files.map((file) => ({
+            path: file.path,
+            changeKind: file.changeKind,
+            origin: file.origin,
+            additions: file.additions,
+            deletions: file.deletions,
+            binary: file.binary,
+            previousPath: file.previousPath,
+          })),
+          patches: result.initialPatches.map((patch) => ({
+            path: patch.path,
+            patch: patch.patch,
+          })),
+        };
+      }
+      if (result.outcome === "not_applicable") return { kind: "not_git" as const };
+      return { kind: "unavailable" as const, message: result.failure.message };
+    },
+
+    async gitFileDiff({ scope, path: relativePath }) {
+      const resolved = await requireScope(scope);
+      if (resolved.environmentId === null) return { kind: "not_git" as const };
+      const result = await bb.sdk.environments.diffPatch({
+        environmentId: resolved.environmentId,
+        target: { type: "uncommitted" },
+        // One path: the caller is opening a single file, and asking for the
+        // whole change set again would re-transfer hundreds of patches.
+        paths: [normalizeRelative(relativePath)],
+      });
+      if (result.outcome === "available") {
+        const entry = result.patches[0];
+        // A path the daemon dropped (renamed away, or unchanged) has no patch.
+        if (entry === undefined) {
+          return { kind: "available" as const, patch: "", truncated: false };
+        }
+        return {
+          kind: "available" as const,
+          patch: entry.patch,
+          truncated: entry.truncated,
+        };
+      }
+      if (result.outcome === "not_applicable") return { kind: "not_git" as const };
+      return { kind: "unavailable" as const, message: result.failure.message };
     },
   });
 

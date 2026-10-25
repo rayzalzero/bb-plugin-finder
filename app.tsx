@@ -6,7 +6,6 @@ import {
   useRpc,
   type PluginNavPanelProps,
   type PluginThreadHeaderActionProps,
-  type PluginThreadPanelProps,
 } from "@get-bb/plugin-sdk/app";
 import { toast } from "sonner";
 import type { rpcContract, WorkspaceOption } from "./server.js";
@@ -131,7 +130,7 @@ function FilesPage({ subPath }: PluginNavPanelProps) {
  * The same Finder beside a thread, pinned to that thread's workspace — the
  * files the agent in this conversation is actually editing.
  */
-function ThreadFilesPanel({ threadId }: PluginThreadPanelProps) {
+function ThreadFilesPanel({ threadId }: { threadId: string }) {
   const [filePath, setFilePath] = useState<string | null>(null);
   const scope = useMemo<ScopeRef>(() => ({ kind: "thread", id: threadId }), [threadId]);
 
@@ -344,7 +343,12 @@ export default definePluginApp((app) => {
     component: FileOpenerTab,
   });
 
-  app.slots.threadPanelAction({
+  // Retired `threadPanelAction`: `experimental_tab` is the thread-tab slot. The
+  // id stays `thread-finder`, so the header button's `openThreadPanel` and the
+  // host's saved tab identities keep working without a data migration.
+  app.slots.experimental_tab({
+    context: { kind: "thread" },
+    availability: "action",
     id: "thread-finder",
     title: "Finder",
     icon: "FolderOpen",

@@ -17,8 +17,8 @@ behaves like a local one.
 | --- | --- |
 | `server.ts` | The backend: scope resolution (thread → environment → project), the RPC contract, listing, read/write with compare-and-swap, create/rename/remove/upload, content search, the `@`-mention provider, the `bb finder` CLI, and the `excludedDirectories` setting. |
 | `app.tsx` | The frontend entry: `navPanel` (the Finder page), `threadPanelAction` (the Finder tab beside a thread), `experimental_threadHeaderAction` (the folder toggle), and `fileOpener` (routes BB file references into `FileOpenerTab`). |
-| `components/` | `Workspace` is the shell and layout. `Explorer` is the tree and its context menu. `OutlinePanel` is the symbol tree under it. `FilePane`/`FileView`/`FileOpenerTab` render a file; `CodeEditor` is CodeMirror; `FilePaneChrome` holds the shared toolbar/notice/empty-pane pieces. The `use-*` files are the state hooks. |
-| `lib/` | Pure helpers: path arithmetic (`relpath`, `paths`), tree building and filtering (`tree`), content-search matching (`search`), language detection (`file-kind`), the language→CodeMirror extension map (`editor-language`), the theme bridge (`editor-theme`), the outline extractor (`outline`), route parsing (`route`), editor preferences (`prefs`), and per-workspace memory (`workspace-state`). |
+| `components/` | `Workspace` is the shell and layout. `Explorer` is the tree and its context menu. `OutlinePanel` is the symbol tree under it. `ChangesList` is the uncommitted change set and `DiffView` one file's diff (unified or split). `FilePane`/`FileView`/`FileOpenerTab` render a file; `CodeEditor` is CodeMirror; `FilePaneChrome` holds the shared toolbar/notice/empty-pane pieces. The `use-*` files are the state hooks. |
+| `lib/` | Pure helpers: path arithmetic (`relpath`, `paths`), tree building and filtering (`tree`), content-search matching (`search`), language detection (`file-kind`), the language→CodeMirror extension map (`editor-language`), the theme bridge (`editor-theme`), the outline extractor (`outline`), the unified-patch splitter (`diff-parse`), the git change presentation (`git-status`), route parsing (`route`), editor preferences (`prefs`), and per-workspace memory (`workspace-state`). |
 | `skills/finder/SKILL.md` | The bundled agent skill: how an agent should call `bb finder` before touching workspace paths. |
 | `PLUGIN_OVERVIEW.md` | The marketplace long-form description. The store shows it verbatim, so treat it as a product surface, not as notes. |
 
@@ -45,9 +45,18 @@ Break one of these and the plugin is wrong, however well the code reads.
 6. **Realtime signals are scoped.** `CHANGED_CHANNEL` carries the workspace it
    came from, so a write in one workspace never re-lists another.
 7. **A host may unmount the panel at any time.** Anything a user would notice
-   losing — expanded folders, the file in front, drafts, the outline's height —
-   belongs in `lib/prefs.ts` or `lib/workspace-state.ts`, not in React state
-   alone.
+   losing — expanded folders, the file in front, drafts, the outline's height,
+   the diff layout — belongs in `lib/prefs.ts` or `lib/workspace-state.ts`, not
+   in React state alone.
+8. **Git is read through BB's environment diff API, never by shelling out.**
+   `bb.sdk.environments.diffFiles`/`diffPatch` are keyed by `environmentId`, so
+   a scope that resolved to a project checkout (`environmentId: null`) has no
+   diff. That is the SDK's boundary, not a missing feature: return `not_git`
+   rather than walking `.git` by hand.
+9. **A change set can be large, so a patch is fetched per file.** `diffFiles`
+   only preloads patches while the change set is small — 388 changed files
+   arrive with an empty `patches` array. Anything that renders a diff must go
+   through `gitFileDiff` for the one path it shows.
 
 ## Budgets and caps
 
@@ -63,6 +72,7 @@ measuring the cost.
 | `CLI_READ_MAX_BYTES` | `server.ts` | BB rejects a plugin command whose output passes 1 MiB. |
 | `MARKDOWN_PREVIEW_MAX_CHARS` | `lib/file-kind.ts` | The host markdown renderer parses synchronously with no virtualization. |
 | `MAX_OUTLINE_CHARS` / `MAX_SYMBOLS` / `PARSE_BUDGET_MS` | `lib/outline.ts` | An outline must never make typing wait. |
+| `paths: [one]` per `gitFileDiff` call | `server.ts` | `diffFiles` preloads nothing for a large change set, so a diff is requested one path at a time. Asking for the whole set again would re-transfer hundreds of patches. |
 
 ## Commands
 
