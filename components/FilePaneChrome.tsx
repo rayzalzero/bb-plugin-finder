@@ -44,7 +44,7 @@ export function PaneNotice({
   return (
     <div
       className={cn(
-        "flex flex-wrap items-center gap-2 border-b border-border px-3 py-1.5 text-xs",
+        "flex flex-wrap items-center gap-2 px-3 py-1.5 text-xs",
         tone === "warning" ? "bg-amber-500/10 text-amber-200" : "bg-destructive/10 text-destructive",
       )}
     >

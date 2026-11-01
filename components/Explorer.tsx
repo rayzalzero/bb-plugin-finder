@@ -377,7 +377,7 @@ export function Explorer({
 
       {pending === null ? null : (
         <form
-          className="flex items-center gap-1 border-t border-border px-2 py-1.5"
+          className="flex items-center gap-1 px-2 py-1.5"
           onSubmit={(event) => {
             event.preventDefault();
             commit();
@@ -420,7 +420,7 @@ export function Explorer({
         onResize={outline.onResize}
       />
 
-      <div className="flex items-center gap-0.5 border-t border-border px-1.5 py-1">
+      <div className="flex items-center gap-0.5 px-1.5 py-1">
         <FooterAction label="New file" icon="Plus" run={() => begin({ kind: "file", directory: selectedDirectory, path: null, initial: "" })} />
         <FooterAction label="New folder" icon="FolderPlus" run={() => begin({ kind: "directory", directory: selectedDirectory, path: null, initial: "" })} />
         <FooterAction label="Upload files" icon="ArrowUp" run={() => onUpload(selectedDirectory)} />

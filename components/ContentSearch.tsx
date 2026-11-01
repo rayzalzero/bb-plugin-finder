@@ -95,7 +95,7 @@ export function ContentSearch({
 
   return (
     <div className="flex h-full min-h-0 flex-col">
-      <div className="flex items-center gap-1 border-b border-border px-2 py-1.5">
+      <div className="flex items-center gap-1 px-2 py-1.5">
         <DropdownMenu>
           <DropdownMenuTrigger asChild>
             <button
@@ -177,7 +177,7 @@ export function ContentSearch({
       </div>
 
       {search.state.status === "ready" && search.state.hits.length > 0 ? (
-        <div className="flex items-center gap-1 border-b border-border px-2 py-0.5">
+        <div className="flex items-center gap-1 px-2 py-0.5">
           <span className="min-w-0 flex-1 truncate text-[10px] text-muted-foreground">
             {`${search.state.hits.length} matches in ${grouped.length} files`}
             {search.state.truncated ? " · partial, refine the search" : ""}
@@ -223,13 +223,13 @@ export function ContentSearch({
         ) : (
           <>
             {grouped.map((group) => (
-              <div key={group.path} className="border-b border-border/40 last:border-b-0">
+              <div key={group.path}>
                 <button
                   type="button"
                   aria-expanded={!collapsed.has(group.path)}
                   title={group.path}
                   onClick={() => toggleGroup(group.path)}
-                  className="sticky top-0 z-10 flex w-full items-center gap-1 border-b border-border/60 bg-background/95 px-1.5 py-1 text-left backdrop-blur hover:bg-state-hover"
+                  className="sticky top-0 z-10 flex w-full items-center gap-1 bg-background/95 px-1.5 py-1 text-left backdrop-blur hover:bg-state-hover"
                 >
                   <Icon
                     name={collapsed.has(group.path) ? "ChevronRight" : "ChevronDown"}

@@ -151,7 +151,7 @@ export function FilePane({
 
   return (
     <div className="flex h-full min-h-0 flex-col bg-background">
-      <div className="flex flex-wrap items-center gap-0.5 border-b border-border px-2 py-1">
+      <div className="flex flex-wrap items-center gap-0.5 px-2 py-1">
         <span className="mr-1 truncate font-mono text-xs text-muted-foreground" title={path}>
           {path}
         </span>
@@ -207,8 +207,6 @@ export function FilePane({
           />
         )}
 
-        <span className="mx-0.5 h-4 w-px bg-border" />
-
         <PaneToolbarButton
           label={lineWrap ? "Disable line wrap" : "Enable line wrap"}
           icon="TextWrap"
@@ -221,8 +219,6 @@ export function FilePane({
           active={autosave}
           onClick={onToggleAutosave}
         />
-
-        <span className="mx-0.5 h-4 w-px bg-border" />
 
         {isMarkdown && isText ? (
           <PaneToolbarButton

@@ -28,7 +28,7 @@ export function WorkspacePicker({ workspaces, scope, scopeLabel, onChange }: Wor
   const label = current?.label ?? scopeLabel ?? "Choose workspace";
 
   return (
-    <div className="flex items-center gap-1 border-b border-border px-2 py-1">
+    <div className="flex items-center gap-1 px-2 py-1">
       <DropdownMenu>
         <DropdownMenuTrigger asChild>
           <button

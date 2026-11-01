@@ -302,7 +302,7 @@ function WorkspaceState({ scope, filePath, onOpenPath }: WorkspaceProps) {
         {isTreeOpen ? (
           <>
             <div
-              className="flex min-h-0 shrink-0 flex-col border-r border-border"
+              className="flex min-h-0 shrink-0 flex-col"
               style={{ width: `${explorerWidth}px` }}
             >
               <div className="min-h-0 flex-1">
@@ -360,7 +360,7 @@ function WorkspaceState({ scope, filePath, onOpenPath }: WorkspaceProps) {
                 )}
               </div>
               {git.status === "ready" && git.files.size > 0 ? (
-                <div className="flex items-center border-t border-border px-1.5 py-1">
+                <div className="flex items-center px-1.5 py-1">
                   <button
                     type="button"
                     title={git.shortstat}
@@ -512,7 +512,7 @@ function WorkspaceHeader({
   onCloseTab,
 }: WorkspaceHeaderProps) {
   return (
-    <div className="flex flex-col border-b border-border">
+    <div className="flex flex-col">
       <div className="flex items-center gap-1 px-2 py-1">
         <button
           type="button"
@@ -586,12 +586,12 @@ function WorkspaceHeader({
       </div>
 
       {tabs.length === 0 ? null : (
-        <div className="flex items-stretch overflow-x-auto border-t border-border">
+        <div className="flex items-stretch overflow-x-auto">
           {tabs.map((tab) => (
             <div
               key={tab.path}
               className={cn(
-                "group flex max-w-56 shrink-0 items-center gap-1 border-r border-border py-1 pl-1 pr-2 text-xs",
+                "group flex max-w-56 shrink-0 items-center gap-1 py-1 pl-1 pr-2 text-xs",
                 tab.path === activePath
                   ? "bg-accent text-accent-foreground"
                   : "text-muted-foreground hover:bg-accent/50",
@@ -620,12 +620,12 @@ function WorkspaceHeader({
       )}
 
       {tree.status === "error" && tree.error !== null ? (
-        <p className="border-t border-border bg-destructive/10 px-3 py-1 text-xs text-destructive">
+        <p className="bg-destructive/10 px-3 py-1 text-xs text-destructive">
           {tree.error}
         </p>
       ) : null}
       {tree.truncated ? (
-        <p className="border-t border-border bg-amber-500/10 px-3 py-1 text-xs text-amber-200">
+        <p className="bg-amber-500/10 px-3 py-1 text-xs text-amber-200">
           The listing was truncated — this workspace has more files than the plugin lists at once.
         </p>
       ) : null}

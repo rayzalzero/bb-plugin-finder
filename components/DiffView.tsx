@@ -69,7 +69,7 @@ function SplitRowView({ row }: { row: SplitRow }) {
   const rightTone = changed && row.right !== null ? TONE.added : TONE.plain;
   return (
     <div className="flex">
-      <div className={cn("flex min-w-0 flex-1 border-r border-border", leftTone)}>
+      <div className={cn("flex min-w-0 flex-1", leftTone)}>
         <LineNo value={row.leftNo} />
         <span className="min-w-0 flex-1 whitespace-pre-wrap break-all pr-2">
           {row.left === null ? "" : row.left === "" ? "\u00A0" : row.left}
@@ -117,7 +117,7 @@ export function DiffView({
 
   return (
     <div className="flex h-full min-h-0 flex-col">
-      <div className="flex items-center gap-1 border-b border-border px-2 py-1">
+      <div className="flex items-center gap-1 px-2 py-1">
         <span className="min-w-0 flex-1 truncate font-mono text-xs" title={path}>
           Changes to {path}
         </span>

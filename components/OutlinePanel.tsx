@@ -114,7 +114,7 @@ export function OutlinePanel({
           if (event.key === "ArrowUp") onResize(height + 16);
           if (event.key === "ArrowDown") onResize(height - 16);
         }}
-        className="h-1.5 shrink-0 cursor-row-resize border-t border-border bg-transparent hover:bg-accent"
+        className="h-1.5 shrink-0 cursor-row-resize bg-transparent hover:bg-accent"
       />
       <div className="flex items-center gap-1 px-2 py-1">
         <Icon name="Layers" aria-hidden className="size-3 text-muted-foreground" />

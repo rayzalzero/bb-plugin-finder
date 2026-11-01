@@ -166,7 +166,7 @@ function SearchPanel({ view }: { view: EditorView }) {
 
   return (
     <div
-      className="flex flex-col gap-1.5 border-b border-border bg-popover px-2 py-1.5 text-xs text-popover-foreground"
+      className="flex flex-col gap-1.5 bg-popover px-2 py-1.5 text-xs text-popover-foreground"
       // CodeMirror's own panel routes key events through the `search-panel`
       // scope, which is what makes Escape close the panel and F3 / Mod-g step
       // through matches while a field has focus. A React panel has to do it
@@ -232,8 +232,6 @@ function SearchPanel({ view }: { view: EditorView }) {
         <PanelIconButton label="Select all matches" onClick={() => selectMatches(view)}>
           <Icon name="Copy" aria-hidden className="size-3.5" />
         </PanelIconButton>
-
-        <div className="mx-0.5 h-4 w-px bg-border" />
 
         <PanelToggle
           label="Match case"

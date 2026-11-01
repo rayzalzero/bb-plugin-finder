@@ -43,7 +43,7 @@ export function ChangesList({
 
   return (
     <div className="flex h-full min-h-0 flex-col">
-      <div className="flex items-center gap-1 border-b border-border px-2 py-1">
+      <div className="flex items-center gap-1 px-2 py-1">
         <Icon name="DiffModified" aria-hidden className="size-3.5 text-muted-foreground" />
         <span className="text-xs font-medium">Uncommitted changes</span>
         <span className="font-mono text-[10px] tabular-nums text-muted-foreground">
@@ -94,7 +94,7 @@ export function ChangesList({
       </div>
 
       {shortstat === "" ? null : (
-        <div className="border-t border-border px-2 py-1 font-mono text-[10px] text-muted-foreground">
+        <div className="px-2 py-1 font-mono text-[10px] text-muted-foreground">
           {shortstat.trim()}
         </div>
       )}
