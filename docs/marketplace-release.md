@@ -12,7 +12,7 @@ The entry's `source` is a Git semantic-version range:
 "source": {
   "git": {
     "url": "https://github.com/rayzalzero/bb-plugin-finder.git",
-    "range": "^0.2.0"
+    "range": "^0.4.0"
   }
 }
 ```
@@ -22,7 +22,7 @@ BB resolves that range against the repository's **release tags**. Consequences:
 - A new tag `vX.Y.Z` inside the range is picked up **without a new marketplace
   pull request**. The registry is re-read, the newest compatible tag wins, and
   a user's next `bb plugin update finder` installs it.
-- A tag outside the range (for example `1.0.0` while the range is `^0.2.0`) is
+- A tag outside the range (for example `1.0.0` while the range is `^0.4.0`) is
   invisible until the entry's range is widened by a pull request.
 - A tag is immutable by convention. Never move, delete, or reuse one: a moved
   tag makes two different builds answer to the same version, and BB caches
@@ -53,11 +53,11 @@ git add -A
 git commit -m "Add a resizable symbol outline"
 
 # 5. Tag the release commit. Annotated, and never moved afterwards.
-git tag -a v0.2.0 -m "Release v0.2.0"
+git tag -a v0.4.0 -m "Release v0.4.0"
 
 # 6. Publish.
 git push origin HEAD
-git push origin v0.2.0
+git push origin v0.4.0
 
 # 7. Confirm the public tag resolves.
 git ls-remote --tags https://github.com/rayzalzero/bb-plugin-finder.git
@@ -69,7 +69,7 @@ root, so the marketplace entry needs no `tagPrefix` and no `subdir`.
 Verify the release is installable the way a user gets it:
 
 ```sh
-bb plugin install git:https://github.com/rayzalzero/bb-plugin-finder.git@semver:^0.2.0 --yes
+bb plugin install git:https://github.com/rayzalzero/bb-plugin-finder.git@semver:^0.4.0 --yes
 bb plugin list | grep -A3 finder
 ```
 

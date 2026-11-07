@@ -3,8 +3,8 @@
 A VS Code-style file browser for BB. It browses the workspace behind a project,
 an environment, or a thread: a file tree, a CodeMirror editor with find,
 go-to-line, line wrap, and auto-save, a markdown preview that renders Mermaid
-diagrams, and an "add this file to the prompt" action that attaches the file as
-agent-visible context.
+diagrams, and an "add this file, or the lines selected in it, to the prompt"
+action that attaches them as agent-visible context.
 
 ## Preview
 
@@ -49,7 +49,8 @@ contents are read when the message is sent:
   host focuses the tab that is already there instead of duplicating it. The left
   sidebar is never touched.
 - An `@`-mention provider, so any composer can reference a workspace file by
-  path and have its contents resolved fresh at send time.
+  path — or a line range from it — and have its contents resolved fresh at send
+  time.
 
 ## Features
 
@@ -74,7 +75,7 @@ contents are read when the message is sent:
 | Uncommitted changes | Tree badges plus a change list. Every changed file shows a status letter (`M`/`A`/`D`/`R`/`C`/`T`, `?` for untracked) and every folder that holds one shows a count. The tree footer's `N changes` button opens the whole change set in one scroll; a click there, or "View changes" in a file's context menu, opens that file's diff — unified or side by side, remembered between sessions. Reads git through BB's environment diff API, so it needs a thread or environment workspace; a project checkout has no environment to diff |
 | Toggle the file editor | Page header |
 | Toggle the file tree | Page header |
-| Select a file as prompt context | Toolbar button, or `@` in any composer |
+| Select a file as prompt context | Toolbar button or `@` in any composer. Select lines in the editor and the same button attaches only that range; Mod-Alt-A does it from the keyboard. The mention is resolved at send time, so the agent reads the file — or those lines — as they are then |
 | Markdown opens as a preview | Any `.md`/`.markdown` file, the first time it is opened |
 
 ## Reopening the panel

@@ -5,6 +5,7 @@ import {
   type PluginFileOpenerSource,
 } from "@get-bb/plugin-sdk/app";
 import { FilePane, copyToClipboard, type SaveState } from "@/components/FilePane";
+import { useAddToChat } from "@/components/use-add-to-chat";
 import { AUTOSAVE_DELAY_MS, AUTOSAVE_KEY, LINE_WRAP_KEY, readPrefFlag, writePref } from "@/lib/prefs";
 import type { rpcContract, ReadResult } from "../server.js";
 import { isMarkdownPath, type FileViewMode } from "@/lib/file-kind";
@@ -71,6 +72,7 @@ function WorkspaceFileTab({ path, scope, lineRange }: WorkspaceFileTabProps) {
   const [mode, setMode] = useState<FileViewMode>("edit");
   const [autosave, setAutosave] = useState(() => readPrefFlag(AUTOSAVE_KEY, false));
   const [lineWrap, setLineWrap] = useState(() => readPrefFlag(LINE_WRAP_KEY, true));
+  const addToChat = useAddToChat(scope);
 
   const read = useCallback(() => {
     void rpc
@@ -175,6 +177,7 @@ function WorkspaceFileTab({ path, scope, lineRange }: WorkspaceFileTabProps) {
       onSetMode={(_path, next) => setMode(next)}
       onCopyContent={(_path, contents) => copyToClipboard(contents, "Contents")}
       onCopyPath={(target) => copyToClipboard(target, "Path")}
+      onAddToChat={addToChat}
     />
   );
 }

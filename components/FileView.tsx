@@ -3,6 +3,7 @@ import { FilePane, copyToClipboard, type SaveState } from "./FilePane";
 import { isDirty, renderedText, type FileTab } from "./use-file-tabs";
 import type { FileViewMode } from "@/lib/file-kind";
 import { languageForPath, languageLabel, formatBytes } from "@/lib/file-kind";
+import type { LineRange } from "@/lib/mention";
 
 export interface FileViewProps {
   tab: FileTab;
@@ -14,7 +15,7 @@ export interface FileViewProps {
   onSave(path: string, options?: { force: boolean }): void;
   onReload(path: string): void;
   onSetMode(path: string, mode: FileViewMode): void;
-  onAddToChat(path: string, text: string): void;
+  onAddToChat(path: string, range?: LineRange): void;
   onCopyContent(path: string, text: string): void;
   onCopyPath(path: string): void;
   /** 1-based line the editor should reveal once the file is loaded. */

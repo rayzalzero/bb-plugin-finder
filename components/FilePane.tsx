@@ -20,6 +20,7 @@ import {
 } from "@/lib/file-kind";
 import { languageExtension } from "@/lib/editor-language";
 import { editorTheme } from "@/lib/editor-theme";
+import { formatLineRange, type LineRange } from "@/lib/mention";
 import type { ReadResult } from "../server.js";
 
 /**
@@ -62,8 +63,11 @@ export interface FilePaneProps {
   onSetMode(path: string, mode: FileViewMode): void;
   onCopyContent(path: string, text: string): void;
   onCopyPath(path: string): void;
-  /** Absent where there is no composer to attach to. */
-  onAddToChat?: (path: string, text: string) => void;
+  /**
+   * Absent where there is no composer to attach to. With `range`, the pill
+   * stands for those lines only; without it, for the whole file.
+   */
+  onAddToChat?: (path: string, range?: LineRange) => void;
 }
 
 /**
@@ -100,6 +104,8 @@ export function FilePane({
   }).current;
   const [goToLineOpen, setGoToLineOpen] = useState(false);
   const [goToLineValue, setGoToLineValue] = useState("");
+  /** Lines the editor's selection covers, or null when it is only a caret. */
+  const [selection, setSelection] = useState<LineRange | null>(null);
 
   const isText = file !== null && file.kind === "text";
   const language = useMemo(() => languageForPath(path), [path]);
@@ -133,6 +139,22 @@ export function FilePane({
     window.setTimeout(() => handle.goToLine(revealLine), 0);
     onRevealConsumed?.();
   }, [handle, mode, onRevealConsumed, onSetMode, path, revealLine, text]);
+
+  // A selection only exists while the editor is mounted; switching to preview
+  // or opening another file has to drop the old one, or the toolbar would offer
+  // to attach lines the user cannot see.
+  useEffect(() => {
+    setSelection(null);
+  }, [path, mode]);
+
+  const attachToPrompt = useCallback(() => {
+    if (onAddToChat === undefined) return;
+    if (selection !== null) {
+      onAddToChat(path, selection);
+      return;
+    }
+    onAddToChat(path);
+  }, [onAddToChat, path, selection]);
 
   const requestFind = useCallback(() => {
     if (mode !== "edit") onSetMode(path, "edit");
@@ -244,18 +266,22 @@ export function FilePane({
         <PaneToolbarButton label="Copy path" icon="FileText" onClick={() => onCopyPath(path)} />
         {onAddToChat === undefined ? null : (
           <PaneToolbarButton
-            label="Add file as context to the prompt"
+            label={
+              selection === null
+                ? "Add file as context to the prompt (Ctrl/Cmd+Alt+A)"
+                : `Add lines ${formatLineRange(selection)} as context to the prompt (Ctrl/Cmd+Alt+A)`
+            }
             icon="MessageSquarePlus"
             disabled={text === null}
-            onClick={() => {
-              if (text !== null) onAddToChat(path, text);
-            }}
+            active={selection !== null}
+            onClick={attachToPrompt}
           />
         )}
 
         <span className="ml-auto flex items-center gap-2 pr-1 text-[10px] text-muted-foreground">
           {save.kind === "saving" ? <span>Saving…</span> : null}
           {save.kind === "clean" && dirty ? <span>Edited</span> : null}
+          {selection === null ? null : <span>Lines {formatLineRange(selection)}</span>}
           {isText ? <span>{languageLabel(path)}</span> : null}
           {file !== null ? <span>{formatBytes(file.sizeBytes)}</span> : null}
           {isText && file.kind === "text" && !file.editable ? (
@@ -338,6 +364,8 @@ export function FilePane({
               if (mode === "preview") onSetMode(path, "edit");
               setGoToLineOpen(true);
             }}
+            onSelectionChange={setSelection}
+            onAttachSelection={attachToPrompt}
             handle={handle}
             className="h-full"
           />

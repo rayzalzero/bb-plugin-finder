@@ -28,6 +28,7 @@ import {
   createSearchPanelTarget,
   SearchPanelPortal,
 } from "./SearchPanel.js";
+import type { LineRange } from "@/lib/mention";
 
 export interface CodeEditorHandle {
   /** Open CodeMirror's own find-in-file panel (Mod-F also works). */
@@ -48,8 +49,29 @@ export interface CodeEditorProps {
   onSave: () => void;
   /** Mod-Alt-g, routed to the plugin's own line field instead of the built-in dialog. */
   onGoToLine(): void;
+  /**
+   * The lines the main selection covers, or null when it is an empty caret.
+   * Reports on mount and on every selection change, so a toolbar action can be
+   * enabled exactly while there is something to attach.
+   */
+  onSelectionChange(range: LineRange | null): void;
+  /** Mod-Alt-a: attach the current selection to the prompt. */
+  onAttachSelection(): void;
   className?: string;
   handle: CodeEditorHandle;
+}
+
+/**
+ * The main selection as whole lines. `to` is exclusive, so a selection that ends
+ * at the start of a line — Shift+Down from a whole line — must not claim that
+ * line: the character before `to` is the newline of the line above.
+ */
+function selectedLines(state: EditorState): LineRange | null {
+  const range = state.selection.main;
+  if (range.empty) return null;
+  const start = state.doc.lineAt(range.from).number;
+  const end = state.doc.lineAt(range.to - 1).number;
+  return start <= end ? { start, end } : { start: end, end: start };
 }
 
 /**
@@ -68,6 +90,8 @@ export function CodeEditor({
   onChange,
   onSave,
   onGoToLine,
+  onSelectionChange,
+  onAttachSelection,
   className,
   handle,
 }: CodeEditorProps) {
@@ -94,6 +118,10 @@ export function CodeEditor({
   saveRef.current = onSave;
   const goToLineRef = useRef(onGoToLine);
   goToLineRef.current = onGoToLine;
+  const selectionRef = useRef(onSelectionChange);
+  selectionRef.current = onSelectionChange;
+  const attachRef = useRef(onAttachSelection);
+  attachRef.current = onAttachSelection;
 
   const propExtensions = useRef<readonly Extension[]>([]);
   propExtensions.current = [
@@ -139,12 +167,23 @@ export function CodeEditor({
             return true;
           },
         },
+        {
+          key: "Mod-Alt-a",
+          preventDefault: true,
+          run: () => {
+            attachRef.current();
+            return true;
+          },
+        },
         ...searchKeymap,
         ...historyKeymap,
         ...defaultKeymap,
       ]),
       EditorView.updateListener.of((update) => {
         if (update.docChanged) changeRef.current(update.state.doc.toString());
+        if (update.selectionSet || update.docChanged) {
+          selectionRef.current(selectedLines(update.state));
+        }
       }),
     ];
   }
@@ -165,6 +204,7 @@ export function CodeEditor({
     viewRef.current = view;
     setReadyView(view);
     appliedDocument.current = documentKey;
+    selectionRef.current(selectedLines(view.state));
 
     handle.openFind = () => {
       view.focus();
@@ -201,6 +241,9 @@ export function CodeEditor({
         extensions: [...staticExtensions.current, ...propExtensions.current],
       }),
     );
+    // A replaced state has a fresh caret; without this the toolbar could still
+    // offer the previous file's selected lines.
+    selectionRef.current(selectedLines(view.state));
   }, [documentKey, value]);
 
   // Same file, new content (reload, save round-trip): apply as one edit so the

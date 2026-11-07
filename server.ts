@@ -6,7 +6,7 @@ import { resolveWithinRoot } from "./lib/paths.js";
 import { CHANGED_CHANNEL } from "./lib/channels.js";
 import { utf8Head } from "./lib/text.js";
 import { dirnameOf, normalizeRelative } from "./lib/relpath.js";
-import { mentionId, parseMentionId } from "./lib/mention.js";
+import { formatLineRange, mentionId, parseMentionId, sliceLineRange } from "./lib/mention.js";
 import type { FlatEntry } from "./lib/tree.js";
 import { extensionOf } from "./lib/file-kind.js";
 import {
@@ -1031,6 +1031,31 @@ export default function plugin(bb: BbPluginApi) {
         if (file.contentEncoding !== "utf8") {
           return {
             context: `File: ${parsed.path} (${resolved.scope.root}) — binary, ${file.sizeBytes} bytes, not attached`,
+          };
+        }
+        if (parsed.range !== null) {
+          // Sliced at send time, like the whole file: the lines may have moved
+          // since the pill was inserted, and the agent should read what is
+          // there now rather than a copy taken when the user clicked.
+          const lines = file.content.split("\n").length;
+          const slice = sliceLineRange(file.content, parsed.range);
+          if (slice === null) {
+            return {
+              context: `File: ${parsed.path} (lines ${formatLineRange(parsed.range)} — the file has ${lines} lines, so the range is gone)`,
+            };
+          }
+          const truncated = slice.length > MAX_EDITABLE_BYTES;
+          const content = truncated ? slice.slice(0, MAX_EDITABLE_BYTES) : slice;
+          return {
+            context: [
+              `File: ${parsed.path} (lines ${formatLineRange(parsed.range)})`,
+              `Workspace root: ${resolved.scope.root}`,
+              ...(truncated ? ["(truncated to the first 4 MB)"] : []),
+              "",
+              "```",
+              content,
+              "```",
+            ].join("\n"),
           };
         }
         const truncated = file.sizeBytes > MAX_EDITABLE_BYTES;
