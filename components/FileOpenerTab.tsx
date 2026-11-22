@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import {
+  useRealtime,
   useRpc,
   type PluginFileOpenerProps,
   type PluginFileOpenerSource,
@@ -7,6 +8,7 @@ import {
 import { FilePane, copyToClipboard, type SaveState } from "@/components/FilePane";
 import { useAddToChat } from "@/components/use-add-to-chat";
 import { AUTOSAVE_DELAY_MS, AUTOSAVE_KEY, LINE_WRAP_KEY, readPrefFlag, writePref } from "@/lib/prefs";
+import { CHANGED_CHANNEL } from "@/lib/channels";
 import type { rpcContract, ReadResult } from "../server.js";
 import { isMarkdownPath, type FileViewMode } from "@/lib/file-kind";
 import type { ScopeRef } from "@/lib/route";
@@ -74,6 +76,10 @@ function WorkspaceFileTab({ path, scope, lineRange }: WorkspaceFileTabProps) {
   const [lineWrap, setLineWrap] = useState(() => readPrefFlag(LINE_WRAP_KEY, true));
   const addToChat = useAddToChat(scope);
 
+  const text = draft ?? (file !== null && file.kind === "text" ? file.content : null);
+  const editable = file !== null && file.kind === "text" && file.editable;
+  const dirty = draft !== null && file !== null && file.kind === "text" && draft !== file.content;
+
   const read = useCallback(() => {
     void rpc
       .call("read", { scope, path })
@@ -94,6 +100,74 @@ function WorkspaceFileTab({ path, scope, lineRange }: WorkspaceFileTabProps) {
   }, [path, rpc, scope]);
 
   useEffect(read, [read]);
+
+  const inFlightCheck = useRef(false);
+  const checkFreshness = useCallback(() => {
+    if (inFlightCheck.current) return;
+    if (save.kind === "saving") return;
+    if (file === null) return;
+
+    inFlightCheck.current = true;
+    void rpc
+      .call("read", { scope, path })
+      .then((next) => {
+        inFlightCheck.current = false;
+        const changed =
+          next.kind === "text"
+            ? sha256 !== next.sha256
+            : file.kind !== next.kind ||
+              file.sizeBytes !== next.sizeBytes ||
+              (next.kind === "image" && file.kind === "image" && file.dataUrl !== next.dataUrl);
+
+        if (!changed) return;
+
+        if (dirty) {
+          if (save.kind !== "conflict") {
+            setSave({ kind: "conflict" });
+          }
+          return;
+        }
+
+        setFile(next);
+        setDraft(null);
+        setSha256(next.kind === "text" ? next.sha256 : null);
+        setSave({ kind: "clean" });
+      })
+      .catch((cause: unknown) => {
+        inFlightCheck.current = false;
+        if (!dirty) {
+          setError(cause instanceof Error ? cause.message : String(cause));
+        }
+      });
+  }, [dirty, file, path, rpc, save.kind, scope, sha256]);
+
+  useRealtime(CHANGED_CHANNEL, (payload) => {
+    const changed = payload as { scope?: { kind?: unknown; id?: unknown }; path?: unknown } | null;
+    const ref = changed?.scope;
+    if (ref === undefined || typeof ref.kind !== "string" || typeof ref.id !== "string") return;
+    if (`${scope.kind}:${scope.id}` !== `${ref.kind}:${ref.id}`) return;
+    if (changed?.path === path) {
+      checkFreshness();
+    }
+  });
+
+  useEffect(() => {
+    const onFocus = () => checkFreshness();
+    const onVisibilityChange = () => {
+      if (document.visibilityState === "visible") checkFreshness();
+    };
+    window.addEventListener("focus", onFocus);
+    document.addEventListener("visibilitychange", onVisibilityChange);
+    const interval = window.setInterval(() => {
+      if (document.visibilityState === "visible") checkFreshness();
+    }, 2500);
+
+    return () => {
+      window.removeEventListener("focus", onFocus);
+      document.removeEventListener("visibilitychange", onVisibilityChange);
+      window.clearInterval(interval);
+    };
+  }, [checkFreshness]);
 
   const write = useCallback(
     (content: string, options?: { force: boolean }) => {
@@ -131,10 +205,6 @@ function WorkspaceFileTab({ path, scope, lineRange }: WorkspaceFileTabProps) {
     },
     [path, rpc, scope, sha256],
   );
-
-  const text = draft ?? (file !== null && file.kind === "text" ? file.content : null);
-  const editable = file !== null && file.kind === "text" && file.editable;
-  const dirty = draft !== null && file !== null && file.kind === "text" && draft !== file.content;
 
   // Auto-save, off by default and shared with the Finder panel: the setting
   // means the same thing in both places, so it lives in one key.

@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { useRpc } from "@get-bb/plugin-sdk/app";
+import { useRealtime, useRpc } from "@get-bb/plugin-sdk/app";
 import type { rpcContract } from "../server.js";
 import { sameScope, scopeKey, type ScopeRef } from "@/lib/route";
 import {
@@ -10,6 +10,7 @@ import {
   writeDraft,
 } from "@/lib/workspace-state";
 import { allowedMode, isMarkdownPath, type FileViewMode } from "@/lib/file-kind";
+import { CHANGED_CHANNEL } from "@/lib/channels";
 import type { ReadResult } from "../server.js";
 import type { SaveState } from "./FilePane";
 
@@ -117,6 +118,7 @@ export function useFileTabs(scope: ScopeRef | null): FileTabsApi {
   const inFlightRead = useRef(new Map<string, number>());
   const writeSequence = useRef(0);
   const inFlightWrite = useRef(new Map<string, number>());
+  const inFlightCheck = useRef(new Set<string>());
 
   const patch = useCallback((path: string, next: Partial<FileTab>) => {
     setTabs((current) =>
@@ -175,6 +177,118 @@ export function useFileTabs(scope: ScopeRef | null): FileTabsApi {
     [patch, rpc],
   );
 
+  /**
+   * Check if a file changed on disk externally.
+   * If the tab is clean, reload smoothly without losing scroll/caret position.
+   * If the tab is dirty, preserve the user's draft and show a conflict notice.
+   */
+  const checkFreshness = useCallback(
+    (path: string) => {
+      const target = scopeRef.current;
+      if (target === null) return;
+      const targetKey = scopeKey(target);
+      if (inFlightWrite.current.has(path) || inFlightCheck.current.has(path)) return;
+      const currentTab = tabsRef.current.find((entry) => entry.path === path);
+      if (currentTab === undefined || currentTab.file === null) return;
+
+      inFlightCheck.current.add(path);
+      void rpc
+        .call("read", { scope: target, path })
+        .then((file) => {
+          inFlightCheck.current.delete(path);
+          if (scopeKeyRef.current !== targetKey) return;
+          const liveTab = tabsRef.current.find((entry) => entry.path === path);
+          if (liveTab === undefined) return;
+
+          const changed =
+            file.kind === "text"
+              ? liveTab.sha256 !== file.sha256
+              : liveTab.file?.kind !== file.kind ||
+                liveTab.file?.sizeBytes !== file.sizeBytes ||
+                (file.kind === "image" && liveTab.file?.kind === "image" && liveTab.file.dataUrl !== file.dataUrl);
+
+          if (!changed) return;
+
+          if (isDirty(liveTab)) {
+            if (liveTab.save.kind !== "conflict") {
+              patch(path, { save: { kind: "conflict" } });
+            }
+            return;
+          }
+
+          const stored = readDraft(targetKey, path);
+          if (stored !== null) clearDraft(targetKey, path);
+
+          patch(path, {
+            file,
+            draft: null,
+            sha256: file.kind === "text" ? file.sha256 : null,
+            error: null,
+            save: { kind: "clean" },
+          });
+        })
+        .catch((cause: unknown) => {
+          inFlightCheck.current.delete(path);
+          if (scopeKeyRef.current !== targetKey) return;
+          const liveTab = tabsRef.current.find((entry) => entry.path === path);
+          if (liveTab === undefined) return;
+          if (!isDirty(liveTab)) {
+            patch(path, {
+              error: cause instanceof Error ? cause.message : String(cause),
+            });
+          }
+        });
+    },
+    [patch, rpc],
+  );
+
+  // Auto-reload on window focus, visibility change, and periodic poll
+  useEffect(() => {
+    const onFocus = () => {
+      const active = activePathRef.current;
+      if (active !== null) checkFreshness(active);
+    };
+    const onVisibilityChange = () => {
+      if (document.visibilityState === "visible") {
+        const active = activePathRef.current;
+        if (active !== null) checkFreshness(active);
+      }
+    };
+    window.addEventListener("focus", onFocus);
+    document.addEventListener("visibilitychange", onVisibilityChange);
+    const interval = window.setInterval(() => {
+      if (document.visibilityState === "visible") {
+        const active = activePathRef.current;
+        if (active !== null) checkFreshness(active);
+      }
+    }, 2500);
+
+    return () => {
+      window.removeEventListener("focus", onFocus);
+      document.removeEventListener("visibilitychange", onVisibilityChange);
+      window.clearInterval(interval);
+    };
+  }, [checkFreshness]);
+
+  // Check freshness when switching tabs
+  useEffect(() => {
+    if (activePath !== null) {
+      checkFreshness(activePath);
+    }
+  }, [activePath, checkFreshness]);
+
+  // Realtime channel updates from finder
+  useRealtime(CHANGED_CHANNEL, (payload) => {
+    const changed = payload as { scope?: { kind?: unknown; id?: unknown }; path?: unknown } | null;
+    const ref = changed?.scope;
+    if (ref === undefined || typeof ref.kind !== "string" || typeof ref.id !== "string") return;
+    if (scopeKeyRef.current !== `${ref.kind}:${ref.id}`) return;
+    const changedPath = typeof changed?.path === "string" ? changed.path : null;
+    if (changedPath !== null && tabsRef.current.some((tab) => tab.path === changedPath)) {
+      checkFreshness(changedPath);
+    }
+  });
+
   const open = useCallback(
     (path: string) => {
       // Opening an already-open tab only brings it to the front. Re-reading it
@@ -205,6 +319,7 @@ export function useFileTabs(scope: ScopeRef | null): FileTabsApi {
   );
 
   const close = useCallback((path: string) => {
+    inFlightCheck.current.delete(path);
     const current = tabsRef.current;
     const index = current.findIndex((tab) => tab.path === path);
     if (index === -1) return activePathRef.current;
@@ -216,7 +331,7 @@ export function useFileTabs(scope: ScopeRef | null): FileTabsApi {
     const next = remaining[Math.min(index, remaining.length - 1)]?.path ?? null;
     setActivePath(next);
     return next;
-  }, []);
+  }, [rememberDraft]);
 
   const save = useCallback(
     (path: string, options?: { force: boolean }) => {
@@ -281,7 +396,7 @@ export function useFileTabs(scope: ScopeRef | null): FileTabsApi {
           });
         });
     },
-    [patch, rpc],
+    [patch, rememberDraft, rpc],
   );
 
   const setDraft = useCallback(
@@ -312,7 +427,7 @@ export function useFileTabs(scope: ScopeRef | null): FileTabsApi {
       patch(target, { draft: null, sha256: null, save: { kind: "clean" } });
       load(target);
     },
-    [load, patch],
+    [load, patch, rememberDraft],
   );
 
   // Remember the open files and the one in front, so the next visit restores
@@ -346,6 +461,7 @@ export function useFileTabs(scope: ScopeRef | null): FileTabsApi {
       writeSequence.current += 1;
       inFlightRead.current.clear();
       inFlightWrite.current.clear();
+      inFlightCheck.current.clear();
       const remembered = readWorkspaceState(scopeKey(target));
       const seeded = remembered.openPaths.slice(-MAX_TABS).map(unloadedTab);
       setTabs((current) => {
