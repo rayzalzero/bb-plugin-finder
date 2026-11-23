@@ -86,9 +86,22 @@ export function rangeForSelectedText(
   source: string,
   selected: string,
   hint = 0,
+  block?: BlockSpan | null,
 ): LineRange | null {
   const needle = selected.replace(/\n\s*$/, "");
   if (needle.trim() === "") return null;
+
+  // A block whose rendered text survives verbatim into the source (a plain
+  // paragraph or heading) pins the selection to an exact source span: map the
+  // selection's offsets within the block, no occurrence guessing at all.
+  if (block !== null && block !== undefined && block.text.trim() !== "") {
+    const blockIndex = nearestIndexOf(source, block.text, hint);
+    if (blockIndex !== -1) {
+      const start = blockIndex + block.start;
+      const end = blockIndex + Math.max(block.start, block.end - 1);
+      return linesSpanning(source, start, end);
+    }
+  }
 
   const offset = nearestIndexOf(source, needle, hint);
   if (offset !== -1) return linesSpanning(source, offset, offset + needle.length - 1);
@@ -123,6 +136,16 @@ export function rangeForSelectedText(
 interface WordSpan {
   text: string;
   start: number;
+  end: number;
+}
+
+/** The selection's containing block and its offsets within that block. */
+export interface BlockSpan {
+  /** The block's rendered text, as the browser reports it. */
+  text: string;
+  /** Selection start offset within `text`, inclusive. */
+  start: number;
+  /** Selection end offset within `text`, exclusive. */
   end: number;
 }
 

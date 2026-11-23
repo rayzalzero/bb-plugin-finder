@@ -29,7 +29,7 @@ import {
 } from "@/lib/file-kind";
 import { languageExtension } from "@/lib/editor-language";
 import { editorTheme } from "@/lib/editor-theme";
-import { formatLineRange, rangeForSelectedText, type LineRange } from "@/lib/mention";
+import { formatLineRange, rangeForSelectedText, type BlockSpan, type LineRange } from "@/lib/mention";
 import type { ReadResult } from "../server.js";
 
 /**
@@ -188,19 +188,41 @@ export function FilePane({
       }
       setPreviewSelected(true);
       let hint = 0;
+      let block: BlockSpan | null = null;
       try {
         const range = selection.getRangeAt(0);
         const prefix = range.cloneRange();
         prefix.selectNodeContents(container);
         prefix.setEnd(range.startContainer, range.startOffset);
-        const renderedLength = container.textContent?.length ?? 0;
-        hint = renderedLength === 0 ? 0 : prefix.toString().length / renderedLength;
+        const full = document.createRange();
+        full.selectNodeContents(container);
+        const total = full.toString().length;
+        hint = total === 0 ? 0 : prefix.toString().length / total;
+
+        // Pin the selection to its block when the start and end share one, so a
+        // plain paragraph or heading maps to an exact source span rather than
+        // being guessed among repeated words across the whole file.
+        const startBlock = closestBlock(range.startContainer);
+        const endBlock = closestBlock(range.endContainer);
+        if (startBlock !== null && startBlock === endBlock) {
+          const blockRange = document.createRange();
+          blockRange.selectNodeContents(startBlock);
+          const text = blockRange.toString();
+          const startPrefix = blockRange.cloneRange();
+          startPrefix.setEnd(range.startContainer, range.startOffset);
+          const endPrefix = blockRange.cloneRange();
+          endPrefix.setEnd(range.endContainer, range.endOffset);
+          if (text.trim() !== "") {
+            block = { text, start: startPrefix.toString().length, end: endPrefix.toString().length };
+          }
+        }
       } catch {
         // A selection that straddles the renderer's internals can refuse a Range
         // against the container; fall back to no hint rather than losing it.
         hint = 0;
+        block = null;
       }
-      setSelection(rangeForSelectedText(text, selection.toString(), hint));
+      setSelection(rangeForSelectedText(text, selection.toString(), hint, block));
     };
 
     // `mouseup` on the container covers a drag released inside it (even if a
@@ -532,4 +554,10 @@ export function copyToClipboard(text: string, what: string): void {
     .writeText(text)
     .then(() => toast.success(`${what} copied`))
     .catch(() => toast.error(`Could not copy the ${what.toLowerCase()}`));
+}
+
+/** The nearest markdown block element containing `node`, or null. */
+function closestBlock(node: Node): Element | null {
+  const element = node instanceof Element ? node : node.parentElement;
+  return element?.closest("p, li, h1, h2, h3, h4, h5, h6, td, th, blockquote, pre") ?? null;
 }
