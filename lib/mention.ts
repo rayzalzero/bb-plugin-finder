@@ -104,7 +104,19 @@ export function rangeForSelectedText(
 
   const anchor = Math.round((Number.isFinite(hint) ? hint : 0) * sourceWords.length);
   const match = mapSubsequence(sourceWords, selectedWords, anchor);
-  if (match === null) return null;
+  if (match === null) {
+    // Last resort: the longest selected word is the most distinctive and is
+    // preserved verbatim by the renderer, so it anchors at least the one line
+    // it sits on — narrower than the selection, but never a dead end.
+    let longest = "";
+    for (const word of selectedWords) {
+      if (word.length > longest.length) longest = word;
+    }
+    const wordIndex = nearestWordIndex(sourceWords, longest, anchor);
+    if (wordIndex === -1) return null;
+    const span = sourceWords[wordIndex];
+    return linesSpanning(source, span.start, span.end - 1);
+  }
   return linesSpanning(source, sourceWords[match.start].start, sourceWords[match.end].end - 1);
 }
 
@@ -184,6 +196,21 @@ function nearestIndexOf(source: string, needle: string, hint: number): number {
       best = index;
     }
     from = index + 1;
+  }
+  return best;
+}
+
+/** The index of `target` in `words` nearest to `anchorIndex`; -1 when absent. */
+function nearestWordIndex(words: WordSpan[], target: string, anchorIndex: number): number {
+  let best = -1;
+  let bestDistance = Number.POSITIVE_INFINITY;
+  for (let i = 0; i < words.length; i += 1) {
+    if (words[i].text !== target) continue;
+    const distance = Math.abs(i - anchorIndex);
+    if (distance < bestDistance) {
+      bestDistance = distance;
+      best = i;
+    }
   }
   return best;
 }

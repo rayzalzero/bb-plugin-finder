@@ -176,12 +176,19 @@ export function FilePane({
         return;
       }
       setPreviewSelected(true);
-      const range = selection.getRangeAt(0);
-      const prefix = range.cloneRange();
-      prefix.selectNodeContents(container);
-      prefix.setEnd(range.startContainer, range.startOffset);
-      const renderedLength = container.textContent?.length ?? 0;
-      const hint = renderedLength === 0 ? 0 : prefix.toString().length / renderedLength;
+      let hint = 0;
+      try {
+        const range = selection.getRangeAt(0);
+        const prefix = range.cloneRange();
+        prefix.selectNodeContents(container);
+        prefix.setEnd(range.startContainer, range.startOffset);
+        const renderedLength = container.textContent?.length ?? 0;
+        hint = renderedLength === 0 ? 0 : prefix.toString().length / renderedLength;
+      } catch {
+        // A selection that straddles the renderer's internals can refuse a Range
+        // against the container; fall back to no hint rather than losing it.
+        hint = 0;
+      }
       setSelection(rangeForSelectedText(text, selection.toString(), hint));
     };
 
