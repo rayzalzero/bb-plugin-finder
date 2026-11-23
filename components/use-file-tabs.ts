@@ -9,7 +9,7 @@ import {
   readWorkspaceState,
   writeDraft,
 } from "@/lib/workspace-state";
-import { allowedMode, isMarkdownPath, type FileViewMode } from "@/lib/file-kind";
+import { allowedMode, isPreviewablePath, type FileViewMode } from "@/lib/file-kind";
 import { CHANGED_CHANNEL } from "@/lib/channels";
 import type { ReadResult } from "../server.js";
 import type { SaveState } from "./FilePane";
@@ -72,7 +72,7 @@ function unloadedTab(path: string): FileTab {
     error: null,
     draft: null,
     sha256: null,
-    mode: isMarkdownPath(path) ? "preview" : "edit",
+    mode: isPreviewablePath(path) ? "preview" : "edit",
     save: { kind: "clean" },
   };
 }
