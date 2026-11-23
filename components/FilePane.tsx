@@ -11,6 +11,13 @@ import { Input } from "@/components/ui/input";
 import { CodeEditor, type CodeEditorHandle } from "./CodeEditor";
 import { PaneCentered, PaneNotice, PaneToolbarButton } from "./FilePaneChrome";
 import {
+  ContextMenu,
+  ContextMenuContent,
+  ContextMenuItem,
+  ContextMenuShortcut,
+  ContextMenuTrigger,
+} from "@/components/ui/context-menu";
+import {
   allowedMode,
   formatBytes,
   isHtmlPath,
@@ -399,71 +406,86 @@ export function FilePane({
         </PaneNotice>
       ) : null}
 
-      <div className="min-h-0 flex-1 overflow-hidden">
-        {error !== null ? (
-          <PaneCentered tone="error">{error}</PaneCentered>
-        ) : file === null ? (
-          <PaneCentered>
-            <Icon name="Loading" aria-hidden className="size-4 animate-spin" />
-            <span>Opening {path}…</span>
-          </PaneCentered>
-        ) : file.kind === "image" ? (
-          <div className="flex h-full items-start justify-center overflow-auto bg-muted/30 p-4">
-            <img
-              src={file.dataUrl}
-              alt={path}
-              className="max-h-full max-w-full object-contain"
-            />
+      <ContextMenu>
+        <ContextMenuTrigger asChild>
+          <div className="min-h-0 flex-1 overflow-hidden">
+            {error !== null ? (
+              <PaneCentered tone="error">{error}</PaneCentered>
+            ) : file === null ? (
+              <PaneCentered>
+                <Icon name="Loading" aria-hidden className="size-4 animate-spin" />
+                <span>Opening {path}…</span>
+              </PaneCentered>
+            ) : file.kind === "image" ? (
+              <div className="flex h-full items-start justify-center overflow-auto bg-muted/30 p-4">
+                <img
+                  src={file.dataUrl}
+                  alt={path}
+                  className="max-h-full max-w-full object-contain"
+                />
+              </div>
+            ) : file.kind === "binary" ? (
+              <PaneCentered>{file.reason}</PaneCentered>
+            ) : mode === "preview" && text !== null && isHtml ? (
+              <iframe
+                // No allow-same-origin: the page runs in an opaque origin, so it
+                // cannot read BB's DOM, storage or cookies. BB itself rejects
+                // `Origin: null` with 403, so its API and this plugin's RPC stay out
+                // of reach too; only outbound requests to other hosts get through,
+                // and their responses stay unreadable. Scripts, forms and popups
+                // stay on so generated reports and demos behave as in a tab.
+                title={path}
+                srcDoc={text}
+                sandbox="allow-scripts allow-forms allow-popups allow-modals"
+                className="h-full w-full border-0 bg-white"
+              />
+            ) : mode === "preview" && text !== null ? (
+              <div ref={previewRef} className="h-full overflow-auto px-4 py-4">
+                <Markdown content={text} />
+              </div>
+            ) : mode === "read" || file.editable === false ? (
+              <SourceCode
+                content={text ?? ""}
+                path={path}
+                overflow={lineWrap ? "wrap" : "scroll"}
+                className="h-full"
+              />
+            ) : (
+              <CodeEditor
+                // Keyed on the path alone: keying on the hash too would rebuild
+                // the state after every save and throw away the undo history.
+                documentKey={path}
+                value={text ?? ""}
+                language={extension}
+                readOnly={false}
+                lineWrap={lineWrap}
+                theme={theme}
+                onChange={(next) => onChangeDraft(path, next)}
+                onSave={() => onSave(path)}
+                onGoToLine={() => {
+                  if (mode === "preview") onSetMode(path, "edit");
+                  setGoToLineOpen(true);
+                }}
+                onSelectionChange={setSelection}
+                onAttachSelection={attachToPrompt}
+                handle={handle}
+                className="h-full"
+              />
+            )}
           </div>
-        ) : file.kind === "binary" ? (
-          <PaneCentered>{file.reason}</PaneCentered>
-        ) : mode === "preview" && text !== null && isHtml ? (
-          <iframe
-            // No allow-same-origin: the page runs in an opaque origin, so it
-            // cannot read BB's DOM, storage or cookies. BB itself rejects
-            // `Origin: null` with 403, so its API and this plugin's RPC stay out
-            // of reach too; only outbound requests to other hosts get through,
-            // and their responses stay unreadable. Scripts, forms and popups
-            // stay on so generated reports and demos behave as in a tab.
-            title={path}
-            srcDoc={text}
-            sandbox="allow-scripts allow-forms allow-popups allow-modals"
-            className="h-full w-full border-0 bg-white"
-          />
-        ) : mode === "preview" && text !== null ? (
-          <div ref={previewRef} className="h-full overflow-auto px-4 py-4">
-            <Markdown content={text} />
-          </div>
-        ) : mode === "read" || file.editable === false ? (
-          <SourceCode
-            content={text ?? ""}
-            path={path}
-            overflow={lineWrap ? "wrap" : "scroll"}
-            className="h-full"
-          />
-        ) : (
-          <CodeEditor
-            // Keyed on the path alone: keying on the hash too would rebuild
-            // the state after every save and throw away the undo history.
-            documentKey={path}
-            value={text ?? ""}
-            language={extension}
-            readOnly={false}
-            lineWrap={lineWrap}
-            theme={theme}
-            onChange={(next) => onChangeDraft(path, next)}
-            onSave={() => onSave(path)}
-            onGoToLine={() => {
-              if (mode === "preview") onSetMode(path, "edit");
-              setGoToLineOpen(true);
-            }}
-            onSelectionChange={setSelection}
-            onAttachSelection={attachToPrompt}
-            handle={handle}
-            className="h-full"
-          />
-        )}
-      </div>
+        </ContextMenuTrigger>
+        <ContextMenuContent>
+          <ContextMenuItem
+            disabled={text === null || (previewSelected && selection === null)}
+            onSelect={attachToPrompt}
+          >
+            {selection !== null
+              ? `Add lines ${formatLineRange(selection)} to prompt`
+              : "Add file to prompt"}
+            <ContextMenuShortcut>Ctrl/Cmd+Alt+A</ContextMenuShortcut>
+          </ContextMenuItem>
+        </ContextMenuContent>
+      </ContextMenu>
     </div>
   );
 }
