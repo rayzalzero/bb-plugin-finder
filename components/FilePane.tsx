@@ -14,6 +14,7 @@ import {
   ContextMenu,
   ContextMenuContent,
   ContextMenuItem,
+  ContextMenuSeparator,
   ContextMenuShortcut,
   ContextMenuTrigger,
 } from "@/components/ui/context-menu";
@@ -109,6 +110,9 @@ export function FilePane({
   const handle = useRef<CodeEditorHandle>({
     openFind: () => {},
     goToLine: () => {},
+    copy: () => {},
+    cut: () => {},
+    paste: () => {},
   }).current;
   const [goToLineOpen, setGoToLineOpen] = useState(false);
   const [goToLineValue, setGoToLineValue] = useState("");
@@ -225,6 +229,20 @@ export function FilePane({
     }
     onAddToChat(path);
   }, [onAddToChat, path, previewSelected, selection]);
+
+  // Copy what is selected — the editor's selection when it is mounted, else the
+  // rendered/read view's DOM selection — and fall back to the whole file when
+  // nothing is selected, matching the toolbar's "Copy file contents".
+  const copyFromPane = useCallback(() => {
+    if (text === null) return;
+    if (mode === "edit" && file !== null && file.kind === "text" && file.editable && selection !== null) {
+      handle.copy();
+      return;
+    }
+    const dom = window.getSelection();
+    const selected = dom !== null && !dom.isCollapsed ? dom.toString() : "";
+    copyToClipboard(selected !== "" ? selected : text, selected !== "" ? "Selection" : "Contents");
+  }, [file, handle, mode, selection, text]);
 
   // Mod-Alt-a attaches the selection in the editor; mirror it in the preview
   // only while there is a selection, so the shortcut never swallows the host's
@@ -484,6 +502,23 @@ export function FilePane({
               : "Add file to prompt"}
             <ContextMenuShortcut>Ctrl/Cmd+Alt+A</ContextMenuShortcut>
           </ContextMenuItem>
+          <ContextMenuSeparator />
+          <ContextMenuItem disabled={text === null} onSelect={copyFromPane}>
+            Copy
+            <ContextMenuShortcut>Ctrl/Cmd+C</ContextMenuShortcut>
+          </ContextMenuItem>
+          {mode === "edit" && file !== null && file.kind === "text" && file.editable ? (
+            <>
+              <ContextMenuItem onSelect={handle.cut}>
+                Cut
+                <ContextMenuShortcut>Ctrl/Cmd+X</ContextMenuShortcut>
+              </ContextMenuItem>
+              <ContextMenuItem onSelect={handle.paste}>
+                Paste
+                <ContextMenuShortcut>Ctrl/Cmd+V</ContextMenuShortcut>
+              </ContextMenuItem>
+            </>
+          ) : null}
         </ContextMenuContent>
       </ContextMenu>
     </div>

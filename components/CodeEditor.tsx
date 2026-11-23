@@ -35,6 +35,12 @@ export interface CodeEditorHandle {
   openFind(): void;
   /** Put the caret on a 1-based line and scroll it into view. */
   goToLine(line: number): void;
+  /** Copy the editor's selection; no-op before the editor has mounted. */
+  copy(): void;
+  /** Cut the editor's selection; no-op before the editor has mounted. */
+  cut(): void;
+  /** Paste the clipboard at the caret; no-op before the editor has mounted. */
+  paste(): void;
 }
 
 export interface CodeEditorProps {
@@ -218,6 +224,31 @@ export function CodeEditor({
         effects: EditorView.scrollIntoView(position, { y: "center" }),
       });
       view.focus();
+    };
+    handle.copy = () => {
+      const { from, to } = view.state.selection.main;
+      if (from !== to) void navigator.clipboard.writeText(view.state.sliceDoc(from, to));
+    };
+    handle.cut = () => {
+      const { from, to } = view.state.selection.main;
+      if (from !== to) {
+        void navigator.clipboard.writeText(view.state.sliceDoc(from, to));
+        view.dispatch({ changes: { from, to, insert: "" } });
+      }
+    };
+    handle.paste = () => {
+      view.focus();
+      // A real paste through the DOM input pipeline, so CodeMirror's own
+      // paste handling normalises the text; readText is the fallback when the
+      // browser refuses a programmatic paste.
+      if (!document.execCommand("paste")) {
+        void navigator.clipboard
+          .readText()
+          .then((clip) => {
+            if (clip !== "") view.dispatch(view.state.replaceSelection(clip));
+          })
+          .catch(() => {});
+      }
     };
 
     return () => {
