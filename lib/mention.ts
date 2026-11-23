@@ -73,3 +73,72 @@ export function sliceLineRange(content: string, range: LineRange): string | null
   const end = Math.min(range.end, lines.length);
   return lines.slice(range.start - 1, end).join("\n");
 }
+
+/**
+ * The source lines a rendered-text selection most likely covers. Rendered
+ * markdown keeps the visible words but drops the markup, so an exact substring
+ * match is tried first; where whitespace or entities differ, the selection's
+ * first and last non-empty lines are matched in order instead. `hint` is the
+ * selection's approximate position as a 0..1 fraction of the rendered document,
+ * used only to choose among several identical matches.
+ */
+export function rangeForSelectedText(
+  source: string,
+  selected: string,
+  hint = 0,
+): LineRange | null {
+  const needle = selected.replace(/\n\s*$/, "");
+  if (needle.trim() === "") return null;
+
+  const offset = nearestIndexOf(source, needle, hint);
+  if (offset !== -1) return linesSpanning(source, offset, offset + needle.length - 1);
+
+  // Whitespace was normalised or an entity decoded, so the verbatim string no
+  // longer appears; anchor on the selection's first and last visible lines.
+  const edges = selected
+    .split("\n")
+    .map((line) => line.trim())
+    .filter((line) => line !== "");
+  if (edges.length === 0) return null;
+  const first = edges[0];
+  const last = edges[edges.length - 1];
+  const firstOffset = nearestIndexOf(source, first, hint);
+  if (firstOffset === -1) return null;
+  const lastOffset = source.indexOf(last, firstOffset);
+  if (lastOffset === -1) return null;
+  return linesSpanning(source, firstOffset, lastOffset + last.length - 1);
+}
+
+/** The occurrence of `needle` closest to `hint * source.length`. */
+function nearestIndexOf(source: string, needle: string, hint: number): number {
+  if (needle === "") return -1;
+  const target = Math.round((Number.isFinite(hint) ? hint : 0) * source.length);
+  let best = -1;
+  let bestDistance = Number.POSITIVE_INFINITY;
+  let from = 0;
+  for (;;) {
+    const index = source.indexOf(needle, from);
+    if (index === -1) break;
+    const distance = Math.abs(index - target);
+    if (distance < bestDistance) {
+      bestDistance = distance;
+      best = index;
+    }
+    from = index + 1;
+  }
+  return best;
+}
+
+/** The 1-based inclusive lines spanned by a character range. */
+function linesSpanning(source: string, start: number, end: number): LineRange {
+  return { start: lineNumberAt(source, start), end: lineNumberAt(source, end) };
+}
+
+/** The 1-based line of a character offset; newlines are line separators. */
+function lineNumberAt(source: string, index: number): number {
+  let line = 1;
+  for (let i = 0; i < index && i < source.length; i += 1) {
+    if (source.charCodeAt(i) === 10) line += 1;
+  }
+  return line;
+}

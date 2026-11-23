@@ -21,7 +21,7 @@ import {
 } from "@/lib/file-kind";
 import { languageExtension } from "@/lib/editor-language";
 import { editorTheme } from "@/lib/editor-theme";
-import { formatLineRange, type LineRange } from "@/lib/mention";
+import { formatLineRange, rangeForSelectedText, type LineRange } from "@/lib/mention";
 import type { ReadResult } from "../server.js";
 
 /**
@@ -107,6 +107,8 @@ export function FilePane({
   const [goToLineValue, setGoToLineValue] = useState("");
   /** Lines the editor's selection covers, or null when it is only a caret. */
   const [selection, setSelection] = useState<LineRange | null>(null);
+  /** The rendered-markdown container, for reading a DOM selection out of it. */
+  const previewRef = useRef<HTMLDivElement | null>(null);
 
   const isText = file !== null && file.kind === "text";
   const language = useMemo(() => languageForPath(path), [path]);
@@ -143,12 +145,52 @@ export function FilePane({
     onRevealConsumed?.();
   }, [handle, mode, onRevealConsumed, onSetMode, path, revealLine, text]);
 
-  // A selection only exists while the editor is mounted; switching to preview
-  // or opening another file has to drop the old one, or the toolbar would offer
-  // to attach lines the user cannot see.
+  // A selection only lives while its surface is mounted; switching to preview,
+  // to the source viewer, or to another file drops the old one, or the toolbar
+  // would offer to attach lines the user cannot see.
   useEffect(() => {
     setSelection(null);
   }, [path, mode]);
+
+  // A rendered markdown preview is read-only, so the editor's selection callback
+  // never fires there. Read the browser's DOM selection out of the preview and
+  // map it back to the source lines the pill resolves against.
+  useEffect(() => {
+    if (mode !== "preview" || isHtml || text === null) return;
+    const container = previewRef.current;
+    if (container === null) return;
+
+    const sync = () => {
+      const selection = window.getSelection();
+      if (
+        selection === null ||
+        selection.isCollapsed ||
+        !container.contains(selection.anchorNode) ||
+        !container.contains(selection.focusNode)
+      ) {
+        setSelection(null);
+        return;
+      }
+      const range = selection.getRangeAt(0);
+      const prefix = range.cloneRange();
+      prefix.selectNodeContents(container);
+      prefix.setEnd(range.startContainer, range.startOffset);
+      const renderedLength = container.textContent?.length ?? 0;
+      const hint = renderedLength === 0 ? 0 : prefix.toString().length / renderedLength;
+      setSelection(rangeForSelectedText(text, selection.toString(), hint));
+    };
+
+    // `mouseup` on the container covers drags that end inside it; the document
+    // listener covers a drag released outside, so the selection still registers.
+    container.addEventListener("mouseup", sync);
+    container.addEventListener("keyup", sync);
+    document.addEventListener("mouseup", sync);
+    return () => {
+      container.removeEventListener("mouseup", sync);
+      container.removeEventListener("keyup", sync);
+      document.removeEventListener("mouseup", sync);
+    };
+  }, [isHtml, mode, text]);
 
   const attachToPrompt = useCallback(() => {
     if (onAddToChat === undefined) return;
@@ -158,6 +200,21 @@ export function FilePane({
     }
     onAddToChat(path);
   }, [onAddToChat, path, selection]);
+
+  // Mod-Alt-a attaches the selection in the editor; mirror it in the preview
+  // only while there is a selection, so the shortcut never swallows the host's
+  // own binding when the pane is just being read.
+  useEffect(() => {
+    if (mode !== "preview" || isHtml || selection === null) return;
+    const onKeyDown = (event: KeyboardEvent) => {
+      if (event.key === "a" && (event.ctrlKey || event.metaKey) && event.altKey) {
+        event.preventDefault();
+        attachToPrompt();
+      }
+    };
+    document.addEventListener("keydown", onKeyDown);
+    return () => document.removeEventListener("keydown", onKeyDown);
+  }, [isHtml, mode, selection, attachToPrompt]);
 
   const requestFind = useCallback(() => {
     if (mode !== "edit") onSetMode(path, "edit");
@@ -354,7 +411,7 @@ export function FilePane({
             className="h-full w-full border-0 bg-white"
           />
         ) : mode === "preview" && text !== null ? (
-          <div className="h-full overflow-auto px-4 py-4">
+          <div ref={previewRef} className="h-full overflow-auto px-4 py-4">
             <Markdown content={text} />
           </div>
         ) : mode === "read" || file.editable === false ? (
