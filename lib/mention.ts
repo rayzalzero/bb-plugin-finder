@@ -94,28 +94,18 @@ export function rangeForSelectedText(
   if (offset !== -1) return linesSpanning(source, offset, offset + needle.length - 1);
 
   // Rendered markdown drops the source's markers (list bullets, `**`, `[`, URL
-  // targets, heading `#`) but keeps the words in order. Match the selection's
-  // first and last few words against the source's word stream, anchored near
-  // where the selection sits, and refuse rather than guess when either side is
-  // lost.
+  // targets, heading `#`) but keeps the words in order — and a link target can
+  // interleave extra words (the URL) that the rendered text omits. Match the
+  // selection's words as a subsequence of the source's word stream, anchored
+  // near where the selection sits, and refuse rather than guess when it can't.
   const sourceWords = wordsWithOffsets(source);
-  const selectedWords = wordsWithOffsets(needle);
+  const selectedWords = needle.match(/[A-Za-z0-9_]+/g) ?? [];
   if (sourceWords.length === 0 || selectedWords.length === 0) return null;
 
-  const PHRASE = 3;
-  const first = selectedWords.slice(0, PHRASE);
-  const last = selectedWords.slice(Math.max(0, selectedWords.length - PHRASE));
-
   const anchor = Math.round((Number.isFinite(hint) ? hint : 0) * sourceWords.length);
-  const startIndex = matchPhrase(sourceWords, first, anchor, -1);
-  if (startIndex === -1) return null;
-  const endAnchor = startIndex + selectedWords.length - last.length;
-  const endIndex = matchPhrase(sourceWords, last, endAnchor, startIndex);
-  if (endIndex === -1) return null;
-
-  const start = sourceWords[startIndex].start;
-  const endWord = sourceWords[endIndex + last.length - 1];
-  return linesSpanning(source, start, endWord.end - 1);
+  const match = mapSubsequence(sourceWords, selectedWords, anchor);
+  if (match === null) return null;
+  return linesSpanning(source, sourceWords[match.start].start, sourceWords[match.end].end - 1);
 }
 
 interface WordSpan {
@@ -136,33 +126,46 @@ function wordsWithOffsets(source: string): WordSpan[] {
 }
 
 /**
- * The index of `phrase` in `words` starting at or after `minStartIndex`, nearest
- * to `anchorIndex`; -1 when absent.
+ * The first and last source-word index of the first full occurrence of
+ * `selected` as a subsequence of `source`, starting the search nearest
+ * `anchorIndex`; null when no subsequence covers every selected word.
  */
-function matchPhrase(
-  words: WordSpan[],
-  phrase: WordSpan[],
+function mapSubsequence(
+  source: WordSpan[],
+  selected: string[],
   anchorIndex: number,
-  minStartIndex: number,
-): number {
-  let best = -1;
-  let bestDistance = Number.POSITIVE_INFINITY;
-  for (let i = Math.max(0, minStartIndex); i + phrase.length <= words.length; i += 1) {
-    let matches = true;
-    for (let j = 0; j < phrase.length; j += 1) {
-      if (words[i + j].text !== phrase[j].text) {
-        matches = false;
-        break;
+): { start: number; end: number } | null {
+  // Candidate starts nearest the anchor first, so the first full match wins and
+  // the scan stays bounded no matter how large the file is.
+  const order: number[] = [];
+  const seen = new Set<number>();
+  const push = (i: number) => {
+    if (i >= 0 && i < source.length && !seen.has(i)) {
+      seen.add(i);
+      order.push(i);
+    }
+  };
+  push(anchorIndex);
+  for (let d = 1; d < source.length; d += 1) {
+    push(anchorIndex - d);
+    push(anchorIndex + d);
+    if (order.length >= 2000) break;
+  }
+
+  for (const start of order) {
+    let matched = 0;
+    let first = -1;
+    let last = -1;
+    for (let p = start; p < source.length && matched < selected.length; p += 1) {
+      if (source[p].text === selected[matched]) {
+        if (first === -1) first = p;
+        last = p;
+        matched += 1;
       }
     }
-    if (!matches) continue;
-    const distance = Math.abs(i - anchorIndex);
-    if (distance < bestDistance) {
-      bestDistance = distance;
-      best = i;
-    }
+    if (matched === selected.length) return { start: first, end: last };
   }
-  return best;
+  return null;
 }
 
 /** The occurrence of `needle` closest to `hint * source.length`. */
