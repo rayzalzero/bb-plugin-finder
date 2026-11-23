@@ -203,8 +203,9 @@ export function FilePane({
       setSelection(rangeForSelectedText(text, selection.toString(), hint));
     };
 
-    // `mouseup` on the container covers drags that end inside it; the document
-    // listener covers a drag released outside, so the selection still registers.
+    // `mouseup` on the container covers a drag released inside it (even if a
+    // child stops it from bubbling), the document listener covers one released
+    // outside, and `keyup` covers keyboard-driven selection changes.
     container.addEventListener("mouseup", sync);
     container.addEventListener("keyup", sync);
     document.addEventListener("mouseup", sync);

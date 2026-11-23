@@ -238,17 +238,16 @@ export function CodeEditor({
     };
     handle.paste = () => {
       view.focus();
-      // A real paste through the DOM input pipeline, so CodeMirror's own
-      // paste handling normalises the text; readText is the fallback when the
-      // browser refuses a programmatic paste.
-      if (!document.execCommand("paste")) {
-        void navigator.clipboard
-          .readText()
-          .then((clip) => {
-            if (clip !== "") view.dispatch(view.state.replaceSelection(clip));
-          })
-          .catch(() => {});
-      }
+      // readText is the working API in Chromium; a denied read falls back to a
+      // DOM paste, which CodeMirror's own input handler normalises.
+      void navigator.clipboard
+        .readText()
+        .then((clip) => {
+          if (clip !== "") view.dispatch(view.state.replaceSelection(clip));
+        })
+        .catch(() => {
+          document.execCommand("paste");
+        });
     };
 
     return () => {
