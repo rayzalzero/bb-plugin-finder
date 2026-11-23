@@ -342,9 +342,12 @@ export function FilePane({
           <PaneCentered>{file.reason}</PaneCentered>
         ) : mode === "preview" && text !== null && isHtml ? (
           <iframe
-            // No allow-same-origin: the page runs in an opaque origin and can
-            // reach neither BB nor the plugin. Scripts, forms and popups stay
-            // on so generated reports and demos behave as they would in a tab.
+            // No allow-same-origin: the page runs in an opaque origin, so it
+            // cannot read BB's DOM, storage or cookies. BB itself rejects
+            // `Origin: null` with 403, so its API and this plugin's RPC stay out
+            // of reach too; only outbound requests to other hosts get through,
+            // and their responses stay unreadable. Scripts, forms and popups
+            // stay on so generated reports and demos behave as in a tab.
             title={path}
             srcDoc={text}
             sandbox="allow-scripts allow-forms allow-popups allow-modals"

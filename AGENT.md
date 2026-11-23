@@ -71,6 +71,7 @@ measuring the cost.
 | `SEARCH_MAX_FILES` / `SEARCH_MAX_MATCHES` / `SEARCH_MAX_FILE_BYTES` | `server.ts` | A content search is bounded three ways and reports when it stopped early. |
 | `CLI_READ_MAX_BYTES` | `server.ts` | BB rejects a plugin command whose output passes 1 MiB. |
 | `MARKDOWN_PREVIEW_MAX_CHARS` | `lib/file-kind.ts` | The host markdown renderer parses synchronously with no virtualization. |
+| `HTML_PREVIEW_MAX_CHARS` | `lib/file-kind.ts` | One 8 MB document already renders in ~1.5 s (measured 2026-11-23); past it the pane shows the source view instead. |
 | `MAX_OUTLINE_CHARS` / `MAX_SYMBOLS` / `PARSE_BUDGET_MS` | `lib/outline.ts` | An outline must never make typing wait. |
 | `paths: [one]` per `gitFileDiff` call | `server.ts` | `diffFiles` preloads nothing for a large change set, so a diff is requested one path at a time. Asking for the whole set again would re-transfer hundreds of patches. |
 

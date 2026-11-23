@@ -63,6 +63,7 @@ contents are read when the message is sent:
 | Find in file | Toolbar button or Mod-F — CodeMirror's panel, with match case, regex, whole word, and replace |
 | Go to line | Toolbar button |
 | Markdown preview with Mermaid | Default view for `.md`/`.markdown` files; the toolbar toggle switches to the source and back |
+| HTML preview | Default view for `.html`/`.htm`: the file renders in a sandboxed iframe, so its scripts, forms and dialogs work while the page stays away from the editor, the workspace, and BB. The toolbar toggle switches to the source and back |
 | Copy file contents | Toolbar button |
 | Copy file path | Toolbar button and tree context menu |
 | Open a code reference from chat in Finder's editor | Any file reference BB opens (a chat link such as `SingleWAValidationEngine.java:61`, the environment diff panel) renders in this plugin's editor instead of BB's read-only preview — with line targeting, find, edit, and save. Settings → Files controls it per extension: *Automatic* picks this opener, *Built-in preview* switches back. Markdown stays with BB's preview |
@@ -171,6 +172,13 @@ Set it with `bb plugin config finder set excludedDirectories $'node_modules\n.gi
 - Markdown preview is refused past 1,000,000 characters, because the host
   renderer parses the whole document synchronously. Such a file opens in the
   source view instead, and the toolbar's mode button takes it to the editor.
+- HTML preview runs the page in an opaque origin. Scripts, forms, and dialogs
+  work, but the page cannot use `localStorage`, `sessionStorage`, or cookies
+  (each throws `SecurityError`), cannot read BB's state or call its API or this
+  plugin's RPC, and cannot load CSS, images, or scripts sitting next to the file:
+  a relative `src` resolves against BB's own origin instead of the workspace.
+  A page that persists state on load renders broken. HTML preview is refused past
+  8 MB, where one render already costs about 1.5 s.
 - Content search reads at most 2,000 files, returns at most 500 matches, and
   skips files over 2 MB. It says "partial, refine the search" when it stops
   early. Binary extensions are never decoded; `.docx`/`.xlsx`/`.pptx` are
