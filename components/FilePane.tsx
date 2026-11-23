@@ -107,6 +107,8 @@ export function FilePane({
   const [goToLineValue, setGoToLineValue] = useState("");
   /** Lines the editor's selection covers, or null when it is only a caret. */
   const [selection, setSelection] = useState<LineRange | null>(null);
+  /** True while the preview holds a non-collapsed DOM selection of its own. */
+  const [previewSelected, setPreviewSelected] = useState(false);
   /** The rendered-markdown container, for reading a DOM selection out of it. */
   const previewRef = useRef<HTMLDivElement | null>(null);
 
@@ -150,6 +152,7 @@ export function FilePane({
   // would offer to attach lines the user cannot see.
   useEffect(() => {
     setSelection(null);
+    setPreviewSelected(false);
   }, [path, mode]);
 
   // A rendered markdown preview is read-only, so the editor's selection callback
@@ -168,9 +171,11 @@ export function FilePane({
         !container.contains(selection.anchorNode) ||
         !container.contains(selection.focusNode)
       ) {
+        setPreviewSelected(false);
         setSelection(null);
         return;
       }
+      setPreviewSelected(true);
       const range = selection.getRangeAt(0);
       const prefix = range.cloneRange();
       prefix.selectNodeContents(container);
@@ -198,8 +203,14 @@ export function FilePane({
       onAddToChat(path, selection);
       return;
     }
+    // The preview has a selection we could not map back to source lines; a
+    // whole-file pill would silently say the wrong thing, so refuse instead.
+    if (previewSelected) {
+      toast.error("Couldn't map the selection to source lines");
+      return;
+    }
     onAddToChat(path);
-  }, [onAddToChat, path, selection]);
+  }, [onAddToChat, path, previewSelected, selection]);
 
   // Mod-Alt-a attaches the selection in the editor; mirror it in the preview
   // only while there is a selection, so the shortcut never swallows the host's
@@ -327,9 +338,11 @@ export function FilePane({
         {onAddToChat === undefined ? null : (
           <PaneToolbarButton
             label={
-              selection === null
-                ? "Add file as context to the prompt (Ctrl/Cmd+Alt+A)"
-                : `Add lines ${formatLineRange(selection)} as context to the prompt (Ctrl/Cmd+Alt+A)`
+              selection !== null
+                ? `Add lines ${formatLineRange(selection)} as context to the prompt (Ctrl/Cmd+Alt+A)`
+                : previewSelected
+                  ? "Selection couldn't be mapped to lines"
+                  : "Add file as context to the prompt (Ctrl/Cmd+Alt+A)"
             }
             icon="MessageSquarePlus"
             disabled={text === null}

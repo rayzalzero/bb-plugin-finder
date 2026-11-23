@@ -93,20 +93,76 @@ export function rangeForSelectedText(
   const offset = nearestIndexOf(source, needle, hint);
   if (offset !== -1) return linesSpanning(source, offset, offset + needle.length - 1);
 
-  // Whitespace was normalised or an entity decoded, so the verbatim string no
-  // longer appears; anchor on the selection's first and last visible lines.
-  const edges = selected
-    .split("\n")
-    .map((line) => line.trim())
-    .filter((line) => line !== "");
-  if (edges.length === 0) return null;
-  const first = edges[0];
-  const last = edges[edges.length - 1];
-  const firstOffset = nearestIndexOf(source, first, hint);
-  if (firstOffset === -1) return null;
-  const lastOffset = source.indexOf(last, firstOffset);
-  if (lastOffset === -1) return null;
-  return linesSpanning(source, firstOffset, lastOffset + last.length - 1);
+  // Rendered markdown drops the source's markers (list bullets, `**`, `[`, URL
+  // targets, heading `#`) but keeps the words in order. Match the selection's
+  // first and last few words against the source's word stream, anchored near
+  // where the selection sits, and refuse rather than guess when either side is
+  // lost.
+  const sourceWords = wordsWithOffsets(source);
+  const selectedWords = wordsWithOffsets(needle);
+  if (sourceWords.length === 0 || selectedWords.length === 0) return null;
+
+  const PHRASE = 3;
+  const first = selectedWords.slice(0, PHRASE);
+  const last = selectedWords.slice(Math.max(0, selectedWords.length - PHRASE));
+
+  const anchor = Math.round((Number.isFinite(hint) ? hint : 0) * sourceWords.length);
+  const startIndex = matchPhrase(sourceWords, first, anchor, -1);
+  if (startIndex === -1) return null;
+  const endAnchor = startIndex + selectedWords.length - last.length;
+  const endIndex = matchPhrase(sourceWords, last, endAnchor, startIndex);
+  if (endIndex === -1) return null;
+
+  const start = sourceWords[startIndex].start;
+  const endWord = sourceWords[endIndex + last.length - 1];
+  return linesSpanning(source, start, endWord.end - 1);
+}
+
+interface WordSpan {
+  text: string;
+  start: number;
+  end: number;
+}
+
+/** Word tokens and their source offsets; markdown punctuation is skipped. */
+function wordsWithOffsets(source: string): WordSpan[] {
+  const words: WordSpan[] = [];
+  const re = /[A-Za-z0-9_]+/g;
+  let match: RegExpExecArray | null;
+  while ((match = re.exec(source)) !== null) {
+    words.push({ text: match[0], start: match.index, end: match.index + match[0].length });
+  }
+  return words;
+}
+
+/**
+ * The index of `phrase` in `words` starting at or after `minStartIndex`, nearest
+ * to `anchorIndex`; -1 when absent.
+ */
+function matchPhrase(
+  words: WordSpan[],
+  phrase: WordSpan[],
+  anchorIndex: number,
+  minStartIndex: number,
+): number {
+  let best = -1;
+  let bestDistance = Number.POSITIVE_INFINITY;
+  for (let i = Math.max(0, minStartIndex); i + phrase.length <= words.length; i += 1) {
+    let matches = true;
+    for (let j = 0; j < phrase.length; j += 1) {
+      if (words[i + j].text !== phrase[j].text) {
+        matches = false;
+        break;
+      }
+    }
+    if (!matches) continue;
+    const distance = Math.abs(i - anchorIndex);
+    if (distance < bestDistance) {
+      bestDistance = distance;
+      best = i;
+    }
+  }
+  return best;
 }
 
 /** The occurrence of `needle` closest to `hint * source.length`. */
